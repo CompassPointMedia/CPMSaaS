@@ -1,3 +1,10 @@
+## 2019-09-11: hold notes
+CI4 is radically different enough to represent a refactor of packages and my Data class to the point that I decided to hold off for now.
+It also has the spectre of being slow, which is the whole reason for CI in the first place
+The routing holds promise however, and the namespacing seems to be more flexible; the documentation says the system will even make "educated guesses"
+about the proper class to load.
+
+
 # CodeIgniter 4 Development
 
 [![Build Status](https://github.com/codeigniter4/CodeIgniter4/workflows/PHPUnit/badge.svg)](https://github.com/codeigniter4/CodeIgniter4/actions?query=workflow%3A%22PHPUnit%22)
@@ -11,7 +18,7 @@
 
 ## What is CodeIgniter?
 
-CodeIgniter is a PHP full-stack web framework that is light, fast, flexible, and secure.
+CodeIgniter is a PHP full-stack web framework that is light, fast, flexible and secure.
 More information can be found at the [official site](http://codeigniter.com).
 
 This repository holds the source code for CodeIgniter 4 only.

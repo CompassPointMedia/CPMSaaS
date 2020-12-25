@@ -1,0 +1,471 @@
+/**
+--------------- Bootstrap 4 emulation styles ---------------------
+@date: 2018-08-23
+@author: Sam Fullman <sfullman@presidio.com>
+B4 is much more logical in approach than B3, but since we have multiple themes, it's difficult to declare
+the details for .bg-dark and .text-white.  Expect all of the following to be replaced by a future B4
+update (with SASS) when we get to it, probably in version 3 of the App
+
+example: https://getbootstrap.com/docs/4.0/utilities/colors/
+ */
+
+.x-bg-dark{
+    background-color: rgba(0,0,0,1);
+}
+.x-text-white{
+    color: rgba(255,255,255,1);
+}
+
+
+/* ------------ End Bootstrap 4 emulation styles ----------------- */
+
+
+.priority-tile{
+    display: inline-block;
+    width: 17px;
+    height: 17px;
+    font-size: 1px;
+    border-radius: 3px;
+}
+.priority-high{
+    background-color:darkred;
+}
+.priority-medium{
+    background-color: orange;
+}
+.priority-low{
+    background-color: forestgreen;
+}
+
+.toggleShowCalendar{
+    cursor: pointer;
+}
+
+.cpm-cp{
+    cursor: pointer;
+}
+table.cpm-table-simple{
+    border-collapse: collapse;
+}
+.cpm-table-simple td, .cpm-table-simple th{
+    border:1px solid #666;
+    padding:2px 4px;
+}
+
+.no-records{
+    font-size:125%;
+    border-radius: 5px;
+    padding: 10px 0px;
+}
+
+.daterange{
+    cursor: pointer;
+    font-weight: 400 !important;
+}
+
+.daterange .no-dates{
+    opacity: .40;
+}
+
+.daterange > div > .input-group-addon{
+    width: inherit !important;
+    border: none !important;
+}
+
+#manageDateRange .modal-body,
+#manageDateRange .modal-header,
+#manageDateRange .modal-footer{
+    padding-top: 10px;
+    padding-bottom: 10px;
+}
+
+.cpm .modal-header h4{
+    float: left;
+    margin: 0;
+    font-weight: 400;
+}
+.cpm caption{
+    font-size: 133%;
+}
+
+.cpm-pagination {
+    display: table;
+    border-collapse: separate;
+    border-spacing: 5px;
+    margin: 5px 0px;
+    padding: 0px;
+}
+.cpm-pagination template {
+    display: table-row;
+}
+.cpm-pagination li {
+    display: table-cell;
+    padding: 5px;
+    border: 1px solid #666;
+    border-radius: 3px;
+    text-align: center;
+    min-width: 2em;
+    cursor: pointer;
+}
+
+.cpm-pagination .active{
+    background-color: lightgoldenrodyellow;
+}
+
+.cpm-pagination li{
+    list-style: none;
+}
+.cpm-pagination .ellipsis{
+    border: 1px solid rgba(0,0,0,0.0);
+}
+
+.cpm .column-headings{
+    cursor:pointer;
+}
+.cpm .column-headings:hover{
+    background-color: rgba(216, 216, 216, 0.15);
+}
+
+/* don't show any indication of resizable-ness before 0.2 */
+.cpm-0-2 .column-headings:before{
+    height: 100%;
+    width: 4px;
+    background-color: rgba(0, 0, 0, 0.02);
+    position: absolute;
+    top:0px;
+    right: 0px;
+    cursor: col-resize;
+    content: '';
+
+}
+
+.cpm .column-headings{
+    padding-right: 27px !important;
+    position: relative;
+}
+.cpm .column-headings:after{
+    position: absolute;
+    right: 5px;
+    font-size: 80%;
+    font-weight: 400;
+    opacity: .75;
+    border: 1px solid white;
+    border-radius: 3px;
+    text-align: center;
+    padding: 0px 4px;
+}
+.cpm .column-headings::selection{
+    background: none;
+}
+
+.cpm-datatable td{
+    max-width: 350px;
+}
+
+.column-sorted-asc-1, .column-sorted-binasc-1{
+    background-color: rgba(29, 98, 179, 1.0);
+    color:white;
+}
+.column-sorted-asc-2, .column-sorted-binasc-2{
+    background-color: rgba(29, 98, 179, .70);
+    color:white;
+}
+.column-sorted-asc-3, .column-sorted-binasc-3{
+    background-color: rgba(29, 98, 179, .40);
+    color:white;
+}
+.column-sorted-desc-1, .column-sorted-bindesc-1{
+    background-color: rgba(29, 98, 179, 1.0);
+    color:white;
+}
+.column-sorted-desc-2, .column-sorted-bindesc-2{
+    background-color: rgba(29, 98, 179, .70);
+    color:white;
+}
+.column-sorted-desc-3, .column-sorted-bindesc-3{
+    background-color: rgba(29, 98, 179, .40);
+    color:white;
+}
+
+.column-sorted-asc-1:hover, .column-sorted-binasc-1:hover{
+    background-color: rgba(29, 98, 179, .85) !important;
+    color:white !important;
+}
+.column-sorted-asc-2:hover, .column-sorted-binasc-2:hover{
+    background-color: rgba(29, 98, 179, .55) !important;
+    color:white !important;
+}
+.column-sorted-asc-3:hover, .column-sorted-binasc-3:hover{
+    background-color: rgba(29, 98, 179, .25) !important;
+    color:white !important;
+}
+.column-sorted-desc-1:hover, .column-sorted-bindesc-1:hover{
+    background-color: rgba(29, 98, 179, .85) !important;
+    color:white !important;
+}
+.column-sorted-desc-2:hover, .column-sorted-bindesc-2:hover{
+    background-color: rgba(29, 98, 179, .55) !important;
+    color:white !important;
+}
+.column-sorted-desc-3:hover, .column-sorted-bindesc-3:hover{
+    background-color: rgba(29, 98, 179, .25) !important;
+    color:white !important;
+}
+
+
+.column-sorted-asc-1:after, .column-sorted-binasc-1:after{
+    content: "1";
+}
+.column-sorted-asc-2:after, .column-sorted-binasc-2:after{
+    content: "2";
+}
+.column-sorted-asc-3:after, .column-sorted-binasc-3:after{
+    content: "3";
+}
+.column-sorted-desc-1:after, .column-sorted-bindesc-1:after{
+    content: "-1";
+}
+.column-sorted-desc-2:after, .column-sorted-bindesc-2:after{
+    content: "-2";
+}
+.column-sorted-desc-3:after, .column-sorted-bindesc-3:after{
+    content: "-3";
+}
+.edit-device, .delete-device{
+    cursor: pointer;
+}
+
+.rowLabel{
+    white-space: nowrap;
+}
+
+.cpm label{
+    font-weight: 400;
+}
+.loading-data{
+    background-image: url("../images/animated/ajax-loader2.gif");
+    background-position: left top;
+    display: inline-block;
+    font-size: 151%;
+    background-size: 25px 25px;
+    background-repeat: no-repeat;
+    padding-left: 35px;
+
+    /* Fallback for web browsers that don't support RGBa * /
+    background-color: rgb(255, 255, 255);
+    /* RGBa with 0.6 opacity * /
+    background-color: rgba(255, 255, 255, 0.6);
+    /* For IE 5.5 - 7* /
+    filter:progid:DXImageTransform.Microsoft.gradient(startColorstr=#99ffffff, endColorstr=#99ffffff);
+    */
+}
+
+.cpm-calendar-legend {
+}
+.cpm-calendar-legend td, .cpm-calendar-legend th{
+    font-size: 85%;
+    padding: 2px 5px;
+}
+
+.cal-container .content .date{
+    cursor: pointer;
+    padding-left: 1px;
+    padding-right: 1px;
+    min-width: 1.5em;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    margin-right: 1px;
+    margin-top: 2px;
+    text-align: center;
+    font-size: 92%;
+}
+.cal-container .content .date:hover{
+    background-color: lightgoldenrodyellow;
+}
+
+.balloon {
+    display: inline-block;
+    padding: 0px 3px;
+    border-radius: 2px;
+}
+.right-inset {
+    float: right; border-left: 1px solid #ccc; border-bottom: 1px solid #ccc;
+}
+.cpm-blank {
+    opacity: .35;
+}
+
+#cpmstd-tracking-calendar .past,
+#cpmstd-tracking-calendar .today,
+#cpmstd-tracking-calendar .periodLabel{
+    color: #212121;
+}
+#cpmstd-tracking-calendar .past .date,
+#cpmstd-tracking-calendar .today .date{
+    background-color: rgba(255, 255, 255, 0.4);
+}
+
+.calendar-container{
+    margin-bottom: 25px;
+}
+
+.is-danger{
+    padding: 2px 0px 0px 6px;
+}
+.is-danger, .is-danger[style*='display: none'] {
+    color: darkred;
+    transition: all .5s;
+    display: block !important;
+    font-size: 50%;
+    height: 0;
+    opacity: 0;
+}
+
+.is-danger:not([style*='display: none']) {
+    font-size: inherit;
+    height: auto;
+    opacity: 1;
+}
+
+.structure-group-heading h4{
+    font-weight: 400;
+}
+.structure-group-heading h4 label{
+    cursor: pointer;
+}
+
+.cpm-layer{
+    position: absolute;
+    top: 100px;
+    left: 100px;
+    width:375px;
+    height:150px;
+    z-index: 1000;
+}
+.cpm-layer-default{
+    border: 1px solid #999;
+    background-color: rgba(0,0,0,.75);
+    padding:10px 15px;
+}
+
+
+.cvt-selector{
+    font-weight: 400 !important;
+}
+
+#cvt-selector-widget-header{
+    cursor: move;
+    z-index: 1001;
+    margin: -10px -15px 10px -15px;
+    padding: 5px 15px;
+    font-weight: 400 !important;
+    text-shadow: none !important;
+    font-size: 115%;
+}
+
+#cvt-selector-widget{
+    max-width: 90%;
+}
+
+.cpm-hostname-list:after{
+    content: ', ';
+}
+.cpm-hostname-list:last-child:after{
+    content: '';
+}
+
+.spacer-table > div > div{
+    padding: 4px 10px 4px 5px !important;
+    font-size: 100%;
+}
+
+.table > tbody > tr.row-danger > td,
+.table > tbody > tr.row-warning > td
+{
+    border-top:inherit;
+    border-bottom: inherit;
+}
+
+.row-danger{
+    border-top: 1px solid rgba(234, 51, 35, 1) !important;
+    border-right: 7px solid rgba(234, 51, 35, 1) !important;
+    border-bottom: 1px solid rgba(234, 51, 35, 1) !important;
+    border-left: 7px solid rgba(234, 51, 35, 1) !important;
+    background-color: rgba(237, 205,205, 1) !important;
+}
+.row-warning{
+    border-top: 1px solid rgba(241, 157, 57, 1) !important;
+    border-right: 7px solid rgba(241, 157, 57, 1) !important;
+    border-bottom: 1px solid rgba(241, 157, 57, 1) !important;
+    border-left: 7px solid rgba(241, 157, 57, 1) !important;
+    background-color: rgba(246, 230, 207, 1) !important;
+}
+.theme-slate .row-danger, .theme-slate .row-warning,
+.theme-cyborg .row-danger, .theme-cyborg .row-warning,
+.theme-darkly .row-danger, .theme-darkly .row-warning
+{
+    color: #222 !important;
+}
+.w-200{
+    min-width: 200px;
+}
+td:focus, td:active {
+    outline: 1px dotted #666;
+    -moz-outline-style: 1px dotted #666;
+}
+
+/* 2018-09-20 Added styles for pie chart and legend UI */
+.distinct-values-chart{
+    padding: 15px;
+}
+.distinct-values-chart svg{
+    width: 300px;
+}
+.cpm-pie-chart{
+    float: left;
+}
+.pie-chart-legend{
+    float: left;
+}
+.pie-chart-legend-swatch{
+    border: 1px solid #666;
+    width: 12px;
+    height: 12px;
+    font-size:1px;
+}
+.pie-chart-legend td, .pie-chart-legend th{
+    padding: 2px 5px;
+}
+.legend-value{
+    text-align: right;
+}
+.legend-percent{
+    text-align: right;
+}
+
+.cpm-cmdb-server-btn {
+    text-align: left;
+    width: 100%;
+}
+.cpm-cmdb-server-btn > div{
+    text-overflow: ellipsis;
+    overflow: hidden;
+    max-width: 150px;
+}
+.cpm-datarow > td.text-right{
+    padding-right: 27px;
+}
+
+.incremental-navigation{
+    float: right;
+    display: inline-block;
+    margin-right: 12px;
+}
+
+.incremental-navigation .nav-disabled{
+    opacity: .35;
+}
+#DatasetFocus-header{
+    cursor: move;
+}
+

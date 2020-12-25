@@ -50,7 +50,7 @@ Available names are: dummy, file, memcached, redis, predis, wincache.
 
 **$backupHandler**
 
-In the case that the first choice $hanlder is not available, this is the next cache handler to load.
+In the case that the first choice $handler is not available, this is the next cache handler to load.
 This is commonly the **file** handler since the file system is always available, but may not fit
 more complex, multi-server setups.
 
@@ -100,7 +100,7 @@ Class Reference
 	:param	int	$ttl: Time To Live, in seconds (default 60)
 	:param	bool	$raw: Whether to store the raw value
 	:returns:	TRUE on success, FALSE on failure
-	:rtype:	string
+	:rtype:	bool
 
 	This method will save an item to the cache store. If saving fails, the
 	method will return FALSE.

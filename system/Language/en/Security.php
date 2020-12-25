@@ -9,7 +9,8 @@
  * file that was distributed with this source code.
  */
 
-// Entity language settings
+// Security language settings
 return [
-	'tryingToAccessNonExistentProperty' => 'Trying to access non existent property {0} of {1}',
+	'disallowedAction' => 'The action you requested is not allowed.',
+	'invalidSameSite'  => 'The SameSite value must be None, Lax, Strict, or a blank string. Given: {0}',
 ];

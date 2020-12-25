@@ -51,3 +51,13 @@ if (file_exists(APPPATH . 'Config/' . ENVIRONMENT . '/Routes.php'))
 {
 	require APPPATH . 'Config/' . ENVIRONMENT . '/Routes.php';
 }
+
+/**
+-- Old routing from 3.x
+$route['api/(:any)/(:any)/(:any)'] = '$1/$2/$3';
+$route['api/(:any)/(:any)'] = '$1/$2';
+$route['core/(:any)/(:any)'] = '$1/$2';
+*/
+
+$routes->add('console/(:segment)', 'Console::$1');
+$routes->add('api/data/(:segment)/(:segment)', 'Data::$1/$2');

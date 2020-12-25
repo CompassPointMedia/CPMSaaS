@@ -31,29 +31,6 @@ class Modules extends BaseModules
 	 */
 	public $discoverInComposer = true;
 
-	/**
-	 * --------------------------------------------------------------------------
-	 * Auto-Discovery Rules
-	 * --------------------------------------------------------------------------
-	 *
-	 * Aliases list of all discovery classes that will be active and used during
-	 * the current application request.
-	 *
-	 * If it is not listed, only the base application elements will be used.
-	 *
-	 * @var string[]
-	 */
-	public function shouldDiscover(string $alias)
-	{
-		if (! $this->enabled)
-		{
-			return false;
-		}
-
-		$alias = strtolower($alias);
-
-		return in_array($alias, $this->activeExplorers);
-	}
     /*
     |--------------------------------------------------------------------------
     | Modules with Routing Authority (Module Routing Engine)
@@ -96,7 +73,19 @@ class Modules extends BaseModules
         ]
     ];
 
-	public $aliases = [
+    /**
+     * --------------------------------------------------------------------------
+     * Auto-Discovery Rules
+     * --------------------------------------------------------------------------
+     *
+     * Aliases list of all discovery classes that will be active and used during
+     * the current application request.
+     *
+     * If it is not listed, only the base application elements will be used.
+     *
+     * @var string[]
+     */
+    public $aliases = [
 		'events',
 		'filters',
 		'registrars',

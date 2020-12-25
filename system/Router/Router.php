@@ -431,6 +431,30 @@ class Router implements RouterInterface
 			return false;
 		}
 
+		// New Module Routing Engine
+        $modules = new Modules();
+        if(! empty($modules->routingModules))
+        {
+            $engine = new ModuleRoutingEngine($modules, $routes);
+
+            if($engine->runThrough($this->collection->getHTTPVerb(), $uri))
+            {
+                $this->detectedLocale = $engine->detectedLocale ?? $this->getLocale();
+
+                $this->controller = $engine->controller;
+
+                $this->method = $engine->method;
+
+                $this->params = $engine->params;
+
+                $this->matchedRoute = $engine->matchedRoute;
+
+                $this->matchedRouteOptions = $engine->matchedRouteOptions;
+
+                return true;
+            }
+        }
+
 		$uri = $uri === '/'
 			? $uri
 			: ltrim($uri, '/ ');

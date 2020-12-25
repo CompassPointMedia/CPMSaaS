@@ -16,6 +16,7 @@ use CodeIgniter\HTTP\Files\FileCollection;
 use CodeIgniter\HTTP\Files\UploadedFile;
 use Config\App;
 use Config\Services;
+use InvalidArgumentException;
 use Locale;
 
 /**
@@ -128,8 +129,13 @@ class IncomingRequest extends Request
 	 * @param string|null $body
 	 * @param UserAgent   $userAgent
 	 */
-	public function __construct($config, URI $uri = null, $body = 'php://input', UserAgent $userAgent)
+	public function __construct($config, URI $uri = null, $body = 'php://input', UserAgent $userAgent = null)
 	{
+		if (empty($uri) || empty($userAgent))
+		{
+			throw new InvalidArgumentException('You must supply the parameters: uri, userAgent.');
+		}
+
 		// Get our body from php://input
 		if ($body === 'php://input')
 		{
@@ -248,7 +254,7 @@ class IncomingRequest extends Request
 	 */
 	public function isAJAX(): bool
 	{
-		return $this->hasHeader('X-Requested-With') && strtolower($this->getHeader('X-Requested-With')->getValue()) === 'xmlhttprequest';
+		return $this->hasHeader('X-Requested-With') && strtolower($this->header('X-Requested-With')->getValue()) === 'xmlhttprequest';
 	}
 
 	//--------------------------------------------------------------------
@@ -266,12 +272,12 @@ class IncomingRequest extends Request
 			return true;
 		}
 
-		if ($this->hasHeader('X-Forwarded-Proto') && $this->getHeader('X-Forwarded-Proto')->getValue() === 'https')
+		if ($this->hasHeader('X-Forwarded-Proto') && $this->header('X-Forwarded-Proto')->getValue() === 'https')
 		{
 			return true;
 		}
 
-		if ($this->hasHeader('Front-End-Https') && ! empty($this->getHeader('Front-End-Https')->getValue()) && strtolower($this->getHeader('Front-End-Https')->getValue()) !== 'off')
+		if ($this->hasHeader('Front-End-Https') && ! empty($this->header('Front-End-Https')->getValue()) && strtolower($this->header('Front-End-Https')->getValue()) !== 'off')
 		{
 			return true;
 		}

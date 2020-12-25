@@ -3,7 +3,7 @@
 namespace App\Controllers\Modules;
 
 
-class SamplePrimaryModuleRouting implements \CodeIgniter\Module\ModuleRoutingInterface
+class SamplePrimaryModuleRouting extends \App\Controllers\BaseController implements \CodeIgniter\Module\ModuleRoutingInterface
 {
 
     /**

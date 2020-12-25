@@ -94,10 +94,18 @@ class PreTools {
     }
 }
 
+// If we're using this we probably want this level of reporting
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
+
 function pre($value, $config = []) {
     $die = $config === 'die' || $config == 1 || !empty($config['exit']);
     echo '<pre>';
+    echo "\n";
     print_r($value);
+    echo '</pre>';
     if ($die) die();
 }
 

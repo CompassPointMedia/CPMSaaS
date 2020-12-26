@@ -1,5 +1,13 @@
 <?php
 
+date_default_timezone_set('America/Chicago');
+if(isset($_REQUEST['debugbar'])) {
+    echo "console.log('debug bar intercepted for now in index.php; figure this out');";
+    exit;
+}
+
+session_start();
+
 // Valid PHP Version?
 $minPHPVersion = '7.2';
 if (version_compare(PHP_VERSION, $minPHPVersion, '<'))
@@ -7,6 +15,12 @@ if (version_compare(PHP_VERSION, $minPHPVersion, '<'))
 	die("Your PHP version must be {$minPHPVersion} or higher to run CodeIgniter. Current version: " . PHP_VERSION);
 }
 unset($minPHPVersion);
+include('../tmp/PreTools.class.php');
+pre($_SERVER,1);
+
+if(!empty($_REQUEST['kill'])) {
+    $_SESSION = [];
+}
 
 // Path to the front controller (this file)
 define('FCPATH', __DIR__ . DIRECTORY_SEPARATOR);

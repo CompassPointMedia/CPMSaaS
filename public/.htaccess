@@ -21,10 +21,11 @@ Options All -Indexes
 	RewriteCond %{REQUEST_URI} (.+)/$
       RewriteRule ^ %1 [L,R=301]
 
+	# 2020-12-24: Commented this out - actually I wish just the opposite.  IBM directs non www to www for example
 	# Rewrite "www.example.com -> example.com"
-	RewriteCond %{HTTPS} !=on
-	RewriteCond %{HTTP_HOST} ^www\.(.+)$ [NC]
-	RewriteRule ^ http://%1%{REQUEST_URI} [R=301,L]
+	# RewriteCond %{HTTPS} !=on
+	# RewriteCond %{HTTP_HOST} ^www\.(.+)$ [NC]
+	# RewriteRule ^ http://%1%{REQUEST_URI} [R=301,L]
 
 	# Checks to see if the user is attempting to access a valid file,
     # such as an image or css document, if this isn't true it sends the

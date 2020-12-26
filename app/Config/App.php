@@ -23,7 +23,7 @@ class App extends BaseConfig
 	 *
 	 * @var string
 	 */
-	public $baseURL = 'http://localhost:8080/';
+	public $baseURL = '';
 
 	/**
 	 * --------------------------------------------------------------------------
@@ -36,7 +36,7 @@ class App extends BaseConfig
 	 *
 	 * @var string
 	 */
-	public $indexPage = 'index.php';
+	public $indexPage = '';
 
 	/**
 	 * --------------------------------------------------------------------------
@@ -445,4 +445,11 @@ class App extends BaseConfig
 	 * @var boolean
 	 */
 	public $CSPEnabled = false;
+
+	public function __construct() {
+	    $url = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+            || $_SERVER['SERVER_PORT'] == 443 ? 'https://' : 'http://';
+	    $url .= $_SERVER['HTTP_HOST'];
+        $this->baseURL = $url;
+    }
 }

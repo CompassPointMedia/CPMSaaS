@@ -1,0 +1,301 @@
+/* Screen reader only */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0,0,0,0);
+    border: 0;
+}
+
+/* Button styling */
+.menu-toggle {
+    display: inline-block;
+    padding: .33em 15px;
+    line-height: 1em;
+    font-size: 1.5em;
+}
+
+
+/*
+ Default styles + Mobile first
+ Offscreen menu style
+*/
+.main-menu {
+    position: absolute;
+    left: -370px;
+    top: 0;
+    height: 100%;
+    /* removed */
+    orig-overflow-y: scroll;
+    overflow-x: visible;
+    transition: left 0.3s ease,
+    box-shadow 0.3s ease;
+    z-index: 999;
+}
+
+.main-menu ul {
+    list-style: none;
+    margin: 0;
+    padding: 2.5em 0 0;
+    /* Hide shadow w/ -8px while 'closed' */
+    -webkit-box-shadow: -8px 0 8px rgba(0,0,0,.5);
+    -moz-box-shadow: -8px 0 8px rgba(0,0,0,.5);
+    box-shadow: -8px 0 8px rgba(0,0,0,.5);
+    min-height: 100%;
+    min-width: 370px;
+    /* background: rgba(20, 20, 20, .50); */
+}
+
+.main-menu a {
+    display: block;
+    padding: .75em 15px;
+    line-height: 1em;
+    font-size: 1em;
+    color: #fff;
+    text-decoration: none;
+    border-bottom: 1px solid #383838;
+}
+
+.main-menu li:first-child a {
+    border-top: 1px solid #383838;
+}
+
+.main-menu a:hover,
+.main-menu a:focus {
+    background: #333;
+    text-decoration: underline;
+}
+
+.main-menu .menu-close {
+    position: absolute;
+    right: 0;
+    top: 0;
+    border: none !important;
+}
+
+
+
+/*
+ Demo purposes only
+*,
+*:before,
+*:after {
+    box-sizing: border-box;
+}
+*/
+
+header {
+    display: flex;
+    align-items: baseline;
+}
+
+header .logo {
+    display: none;
+    margin: 0 30px 0 10px;
+    font-size: 1.5em;
+}
+
+
+
+
+
+/*
+ On small devices, allow it to toggle...
+*/
+/*
+ :target for non-JavaScript
+ aria-expanded="true/false" will be for JavaScript
+ or - see what I did <sfullman@presidio.com>
+*/
+/* .main-menu:target, - removed this and substituted "expanded" class as my toggle so I don't affect #fragment */
+.main-menu.expanded,
+.main-menu[aria-expanded="true"] {
+    left: 0;
+    outline: none;
+    -moz-box-shadow: 3px 0 12px rgba(0,0,0,.25);
+    -webkit-box-shadow: 3px 0 12px rgba(0,0,0,.25);
+    box-shadow: 3px 0 12px rgba(0,0,0,.25);
+}
+
+/* I note the following are never followed */
+/* .main-menu:target .menu-close, */
+.main-menu[aria-expanded="true"] .menu-close {
+    z-index: 1001;
+}
+
+/* .main-menu:target ul, */
+.main-menu[aria-expanded="true"] ul {
+    position: relative;
+    z-index: 1000;
+}
+
+/*
+ We could us `.main-menu:target:after`, but
+ it wouldn't be clickable.
+*/
+.backdrop.expanded,
+    /* .main-menu:target + .backdrop, we are toggling expanded instead */
+.main-menu[aria-expanded="true"] + .backdrop {
+    position: absolute;
+    position: fixed;
+    display: block;
+    content: "";
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 998;
+    background: #000;
+    background: rgba(0,0,0,.50);
+    cursor: default;
+}
+
+@supports (position: fixed) {
+    .main-menu,
+        /*.main-menu:target + .backdrop,*/
+    .main-menu.expanded,
+    .main-menu[aria-expanded="true"] + .backdrop {
+        position: fixed;
+    }
+}
+
+
+/*
+ Larger screen styling
+ Horizontal menu
+*/
+@media only screen and (min-width: 768px) {
+    .menu-toggle,
+    .main-menu .menu-close,
+    .backdrop {
+        display: none !important;
+    }
+
+    /* Undo positioning of off-canvas menu */
+    .main-menu {
+        position: relative;
+        left: auto;
+        top: auto;
+        height: auto;
+        margin-bottom: 2em;
+    }
+
+    .main-menu ul {
+        display: flex;
+
+        /* Undo off-canvas styling */
+        padding: 0;
+        -webkit-box-shadow: none;
+        -moz-box-shadow: none;
+        box-shadow: none;
+        height: auto;
+        width: auto;
+        /* background: none; */
+    }
+
+    .main-menu a {
+        border: 0 !important; /* Remove borders from off-canvas styling */
+    }
+
+    .main-menu a:hover,
+    .main-menu a:focus {
+        background: none; /* Remove background from off-canvas styling */
+    }
+}
+
+
+
+.main-menu a:hover, .main-menu a:active, .main-menu a:visited{
+    text-decoration: none;
+}
+.main-menu > ul > li.has-children > a {
+    padding-right: 20px;
+}
+.main-menu > ul > li.has-children > a:after{
+    width: 0;
+    height: 0;
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+
+    border-left: 5px solid #fff;
+    float:right;
+    margin-left: 7px;
+    content: "";
+    transition: transform 0.45s ease;
+}
+.main-menu > ul > li.has-children.nav-selected > a:after{
+    -webkit-transform: rotate(90deg);
+    -moz-transform: rotate(90deg);
+    -o-transform: rotate(90deg);
+    -ms-transform: rotate(90deg);
+    transform: rotate(90deg);
+}
+.main-menu ul > li > ul{
+    display: none;
+}
+.main-menu ul > li > ul.show{
+    display:block;
+}
+.main-menu .sub-nav{
+    margin: 0px;
+    padding: 0px;
+}
+.user-tools{
+    text-align: right;
+    padding: .75em 15px;
+}
+.user-tools a{
+    padding: inherit !important;
+    display: inline !important;
+    border: none !important;
+}
+.nav-larger {
+    font-size: 150%;
+}
+
+
+/* for browsers */
+@media only screen and (min-width: 768px){
+    li.has-children > ul{
+        position: absolute;
+        top: 101%;
+        /*background-color: rgba(255, 255, 255, 0.85);*/
+        border-radius: 2px;
+        /*min-width: 350px;*/
+        width: inherit !important;
+    }
+    .main-menu > ul > li.has-children > a:after{
+        position: absolute;
+        top: 45%;
+    }
+    .main-menu{
+        width: 100%;
+    }
+    .user-tools{
+        position: absolute !important;
+        right: 5px !important;
+        bottom: -1.9em !important;
+        padding: inherit !important;
+    }
+    .user-tools a{
+        color: inherit !important;
+    }
+    .user-tools a:hover, .user-tools a:focus{
+        background-color: inherit !important;
+    }
+}
+/* bootstrap override */
+.dropdown-menu.sub-nav{
+    left: inherit !important;
+}
+@media only screen and (max-width: 767px) {
+    .dropdown-menu.sub-nav{
+        position: inherit;
+        float:inherit;
+        box-shadow: none;
+        border: none !important;
+    }
+}

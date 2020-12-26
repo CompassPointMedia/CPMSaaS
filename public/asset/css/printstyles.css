@@ -1,0 +1,12 @@
+@media print {
+    a[href]:after {
+        content: none !important;
+    }
+    .btn, .jumbotron, .controls, tooltip, #FEPCHECK, .headerWell {
+        display: none
+    }
+    .container,.well {
+        width: 95%;
+        border: none;
+    }
+}

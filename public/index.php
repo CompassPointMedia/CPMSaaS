@@ -16,7 +16,6 @@ if (version_compare(PHP_VERSION, $minPHPVersion, '<'))
 }
 unset($minPHPVersion);
 include('../tmp/PreTools.class.php');
-pre($_SERVER,1);
 
 if(!empty($_REQUEST['kill'])) {
     $_SESSION = [];

@@ -3,7 +3,7 @@
 namespace App\Controllers\Modules;
 
 use \App\Models\Auth as AuthModel;
-use \App\Controllers\Modules\SaaS\Auth;
+use \CIAuth\Controllers\Auth;
 use \App\Libraries\ConnectionStore;
 
 class SaaSController extends \App\Controllers\BaseController implements \CodeIgniter\Module\ModuleRoutingInterface
@@ -66,7 +66,7 @@ class SaaSController extends \App\Controllers\BaseController implements \CodeIgn
 
     /**
      * @param string $HTTPVerb
-     * @param string $uri
+     * @param st  ring $uri
      * @param array $module
      * @return bool
      */
@@ -134,7 +134,7 @@ class SaaSController extends \App\Controllers\BaseController implements \CodeIgn
                 $this->controllerConstructor = $this;       // in my view all of the controllers will take
 
             } else if (strtolower($url['controller']) === 'auth'){
-                $this->controller = \App\Controllers\Modules\SaaS\Auth::class;
+                $this->controller = Auth::class;
                 $this->method     = $url['method'];
                 $this->params     = $url['params'];
 

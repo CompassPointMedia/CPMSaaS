@@ -1,7 +1,25 @@
 <?php
 
-namespace App\Controllers\Modules\SaaS;
+namespace CIAuth\Controllers;
 
+/**
+ * todo: does this need to extend BaseController - it's not really a controller but there is a /auth/doSomething path thing at times
+ *
+ * OK this is a controller and needs to properly utilize the model which might in turn receive from CLI or other external APIs
+ *
+ *
+ * DONE     0. Move the login form view into src/Views and have have it used via CodeIgniter 4 namespace view calling
+ * 1. receiving a $saasController is non-standard, we need:
+ *      __construct(What_Class $connector = null, $config = [])
+ * 2. renderAccountAccessLogin is in the wrong place and we need to give this over to the caller
+ * 3.
+ *
+ *
+ * Of course I want to do this by a session file, but we need to think in terms of a session service
+ * which we can read and write data to.
+ *
+ *
+ */
 use \App\Controllers\BaseController;
 use \App\Models\Auth as AuthModel;
 use PHPUnit\Framework\Exception;
@@ -80,7 +98,6 @@ class Auth extends BaseController {
         $requestHash = $hash;
 
         if ($requestAccount !== $this->subdomain) {
-            pre($requestAccount . ':' . $this->subdomain);
             // Cross account login attempt - we will support it but not yet
             // todo: log this
             $this->renderAccountAccessLogin(array_merge(

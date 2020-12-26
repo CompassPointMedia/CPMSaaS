@@ -2,6 +2,6 @@
 
 <?php $this->section('content');?>
 
-<?php echo $this->include('partials/login'); ?>
+<?php echo $this->include('CIAuth\Views\partials\login'); ?>
 
 <?php $this->endSection('content');?>

@@ -31,6 +31,30 @@ class Modules extends BaseModules
 	 */
 	public $discoverInComposer = true;
 
+	/**
+	 * --------------------------------------------------------------------------
+	 * Auto-Discovery Rules
+	 * --------------------------------------------------------------------------
+	 *
+	 * Aliases list of all discovery classes that will be active and used during
+	 * the current application request.
+	 *
+	 * If it is not listed, only the base application elements will be used.
+	 *
+	 * @var string[]
+	 */
+	public function shouldDiscover(string $alias) : bool
+	{
+		if (! $this->enabled)
+		{
+			return false;
+		}
+
+		$alias = strtolower($alias);
+
+		return in_array($alias, $this->activeExplorers ?? []);
+	}
+
     /*
     |--------------------------------------------------------------------------
     | Modules with Routing Authority (Module Routing Engine)
@@ -63,11 +87,16 @@ class Modules extends BaseModules
         // modules get to review URIs in the order they are declared here
         [
             'active' => true,
+            'name' => 'SaaS Portal Controller',
+            'class' => \App\Controllers\Modules\SaaSController::class,
+
+        ],[
+            'active' => false,
             'name' => 'Sample Module Routing temp-stored in Controllers/Modules',
             'class' => \App\Controllers\Modules\SamplePrimaryModuleRouting::class,
 
         ],[
-            'active' => true,
+            'active' => false,
             'name' => 'CMS/Article Module, handles articles stored in database',
             'class' => \App\Controllers\Modules\SampleVendorCMS::class,
         ]

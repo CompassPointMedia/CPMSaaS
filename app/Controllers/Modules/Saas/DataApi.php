@@ -18,14 +18,14 @@ class DataApi extends \App\Controllers\Modules\Saas\Data
 
         $data = new \App\Models\Data($this->dbAccounts[$this->subdomain]);
 
-        $tableRecord = $this->loadAccountTables(str_replace('-', '_', $dataGroup));
+        $tableRecord = $this->data->loadAccountTables(str_replace('-', '_', $dataGroup));
 
-        if (! $this->validateUserAccessToTable($dataGroup)) {
+        if (! $this->data->validateUserAccessToTable($dataGroup, $this->subdomain)) {
             // Error T09
             throw new \App\Exceptions\GeneralFault(9);
         }
 
-        $data->inject($this->actualTableName($tableRecord), ['direct_access' => 'allow']);
+        $data->inject($this->data->actualTableName($tableRecord), ['direct_access' => 'allow']);
 
         $request = $this->request->getPost();
 
@@ -57,14 +57,14 @@ class DataApi extends \App\Controllers\Modules\Saas\Data
 
         $update = new \App\Models\Data($this->dbAccounts[$this->subdomain]);
 
-        $tableRecord = $this->loadAccountTables($dataGroup);
+        $tableRecord = $this->data->loadAccountTables($dataGroup);
 
-        if (! $this->validateUserAccessToTable($dataGroup)) {
+        if (! $this->data->validateUserAccessToTable($dataGroup, $this->subdomain)) {
             // Error T09
             throw new \App\Exceptions\GeneralFault(9);
         }
 
-        $update->inject($this->actualTableName($tableRecord), ['direct_access' => 'allow']);
+        $update->inject($this->data->actualTableName($tableRecord), ['direct_access' => 'allow']);
 
         $request = $this->request->getPost();
 
@@ -87,14 +87,14 @@ class DataApi extends \App\Controllers\Modules\Saas\Data
 
         $insert = new \App\Models\Data($this->dbAccounts[$this->subdomain]);
 
-        $tableRecord = $this->loadAccountTables($dataGroup);
+        $tableRecord = $this->data->loadAccountTables($dataGroup);
 
-        if (! $this->validateUserAccessToTable($dataGroup)) {
+        if (! $this->data->validateUserAccessToTable($dataGroup, $this->subdomain)) {
             // Error T09
             throw new \App\Exceptions\GeneralFault(9);
         }
 
-        $insert->inject($this->actualTableName($tableRecord), ['direct_access' => 'allow']);
+        $insert->inject($this->data->actualTableName($tableRecord), ['direct_access' => 'allow']);
 
         $request = $this->request->getPost();
 
@@ -117,14 +117,14 @@ class DataApi extends \App\Controllers\Modules\Saas\Data
 
         $delete = new \App\Models\Data($this->dbAccounts[$this->subdomain]);
 
-        $tableRecord = $this->loadAccountTables($dataGroup);
+        $tableRecord = $this->data->loadAccountTables($dataGroup);
 
-        if (! $this->validateUserAccessToTable($dataGroup)) {
+        if (! $this->data->validateUserAccessToTable($dataGroup, $this->subdomain)) {
             // Error T09
             throw new \App\Exceptions\GeneralFault(9);
         }
 
-        $delete->inject($this->actualTableName($tableRecord), ['direct_access' => 'allow']);
+        $delete->inject($this->data->actualTableName($tableRecord), ['direct_access' => 'allow']);
 
         $request = $this->request->getPost();
 
@@ -171,7 +171,7 @@ class DataApi extends \App\Controllers\Modules\Saas\Data
 
         $assign = new \App\Models\Data($this->dbAccounts[$this->subdomain]);
 
-        foreach ($this->loadAccountTables() as $record) {
+        foreach ($this->data->loadAccountTables() as $record) {
             if (strlen($record['table_key'])) continue;
             $assign->assign_key($record['id']);
         }

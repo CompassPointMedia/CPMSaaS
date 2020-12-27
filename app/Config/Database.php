@@ -147,7 +147,7 @@ class Database extends Config
 
         // Config > app > juliet-ci-supplement > src > [parent]
         $f = __FILE__;
-        $path = dirname(dirname(dirname(dirname($f))));
+        $path = ROOTPATH . '../';
         if(!file_exists($path . '/private/config.php')){
             exit('file ' . $path . '/private/config.php is required and not present');
         }

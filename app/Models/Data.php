@@ -93,6 +93,13 @@ class Data extends Model{
                 'root_table' => $dataGroupOrTable,
                 'direct_access' => true,
             ];
+
+            // Approved list of injectors for a dataGroup which can be passed by meta
+            $metaInjectors = ['relations'];
+            foreach ($metaInjectors as $injector) {
+                if (!isset($meta[$injector])) continue;
+                $this->dataGroup[$injector] = $meta[$injector];
+            }
             return $this;
         } else if (isset($this->dataGroups[$dataGroupOrTable])) {
             $this->dataGroup = $this->dataGroups[$dataGroupOrTable];
@@ -172,10 +179,29 @@ class Data extends Model{
             if(!empty($dataGroup['structure'][$n])) $structure[$n] = array_merge($structure[$n], $dataGroup['structure'][$n]);
         }
 
+
+        /*
+         * Handle mask requests
+         *
+         * This is fraught with danger because:
+         * 1. I risk not having expected columns; fields may be needed for calculations
+         * 2. Ironically I may risk security by giving a clue on what is NOT there
+         *
+         */
+        $mask = $maskRequestValid = [];
+        $maskRequest = empty($request['_mask']) ? [] :
+            (is_array($request['_mask']) ? $request['_mask'] : explode(',', trim($request['_mask'])));
+
+
         //nice job, CodeIgniter..
         $result = $this->cnx->query('EXPLAIN ' . $root_table);
         foreach($result->getResultArray() as $v){
             $field = $v['Field'];
+
+            if (in_array($field, $maskRequest)) {
+                $maskRequestValid[] = $field;
+            }
+
             if(substr($v['Type'], 0, 4) === 'enum' || $v['Type'] === 'set'){
                 $enum = explode("','", substr($v['Type'], 6, strlen($v['Type']) - 8));
                 $data_range = [];
@@ -198,6 +224,20 @@ class Data extends Model{
             }
         }
 
+        //mask
+        // if $maskRequestValid < $maskRequest - log a warning
+        // if $maskRequest && !$maskRequestValid - throw an error
+        if ($maskRequestValid) {
+            $mask = $maskRequestValid;
+        }
+
+        // Bug S01 - if the user has control over the mask value, the user can request fields which are not intended
+        // we almost need a library of expressions approved by an admin (e.g. concat(firstName, ' ', lastName) and not
+        // concat(username, ':', password)
+        foreach ($maskRequest as $additional) {
+            // allow expressions
+            if (!preg_match('/^[a-z0-9_]+$/i', $additional)) $mask[] = $additional;
+        }
 
         //allow to hard-set field intent
         foreach(['datetime', 'date', 'time', 'timestamp'] as $key){
@@ -208,6 +248,7 @@ class Data extends Model{
             }
         }
 
+        // Bug S02: this needs a significant amount of improvement; I don't believe it was ever used in Broadridge
         if(!empty($meta['field_list'])){
             $fieldList = $meta['field_list'];
         }else if(!empty($dataGroup['lookup_select'])){
@@ -215,12 +256,22 @@ class Data extends Model{
         }else{
             $fieldList = !empty($dataGroup['field_list']) ? $dataGroup['field_list'] : 'r.*';
         }
+        if ($mask) {
+            $fieldList = implode(', ', $mask);
+        }
 
 
-        // 2018-08-05 <sfullman@presido.com> Added ability to pre_process a request as well as CUD
+        // Adds ability to pre_process a request (R) as well as is done with CUD
         if($this->pre_process('read', $request, [])){
+
             $where = $this->query_builder($request, $structure, $meta);
             $where = 'WHERE 1' . (!empty($dataGroup['base_where']) ? ' AND ' . $dataGroup['base_where'] : '') . ($where ? ' AND (' . $where  . ')' : '');
+
+
+
+            // Bug S03: again, opening up a weakness
+            $joins = $this->joinsToSQLString($this->joins);
+
 
             $orderBy = $this->order_by_builder(
                 !empty($request['orderBy']) ? $request['orderBy'] : (!empty($dataGroup['base_order_by']) ? $dataGroup['base_order_by'] : ''),
@@ -236,6 +287,7 @@ class Data extends Model{
                 
                 FROM
                 $root_table r
+                $joins
                 
                 $where
         
@@ -243,15 +295,11 @@ class Data extends Model{
                 
                 $limit";
             $query = $this->cnx->query($sql);
-            //echo '<pre>' . $sql . '</pre>';
 
             $stop = microtime(true);
             $query_took = round($stop - $start, 5);
 
-            $dataset = [];
-            foreach ($query->getResultArray() as $n=>$v){
-                $dataset[$n] = $v;
-            }
+            $dataset = $query->getResultArray();
 
             $query = $this->cnx->query('SELECT FOUND_ROWS() AS `Count`');
             $total_rows = $query->getRow()->Count;
@@ -268,33 +316,71 @@ class Data extends Model{
             }
 
             //fulfill relationships if present
-            if (!$minimal){
+            if (!$minimal && (!empty($this->dataGroup['relations']))){
                 $relations = [];
-                if (!empty($this->dataGroup['relations'])){
-                    foreach ($this->dataGroup['relations'] as $column => $v){
-                        if ($v['identifier']){
-                            //instantiate a new Data model
-                            //note that we may have or need more than one of them open for some type of cross-interaction
-                            $_start = microtime(true);
-                            $r[$column] = new \Data_model();
-                            $r[$column]->inject($v['identifier']);
 
-                            //get the data with limited additional information
-                            if ($result = $r[$column]->request([], ['minimal' => true])){
-                                $_stop = microtime(true);
-                                $relations[$column] = [
-                                    'relation_lookup_took' => round($_stop - $_start, 5),
-                                    'query_took' => $result['query_took'],
-                                    'total_rows' => $result['total_rows'],
-                                    'structure' => $result['structure'],
-                                    'dataset' => $result['dataset'],
-                                    'query' => $result['query'],
-                                ];
+                foreach ($this->dataGroup['relations'] as $field => $relationSet){
+                    if (empty($structure[$field])) {
+                        // todo: log that a non-available relation was requested
+                        continue;
+                    }
+
+                    if ($relation = $this->selectFieldRelation($relationSet)){
+                        //instantiate a new Data model
+                        //note that we may have or need more than one of them open for some type of cross-interaction
+                        $_start = microtime(true);
+                        $r[$field] = new self($this->cnx);
+
+
+                        $r[$field]->inject($relation['identifier'], ['direct_access' => 'allow']);
+
+
+                        //get the data with limited additional information
+
+
+
+
+
+                        // ---------- todo: hack-alert: fix this -------------------
+                        // ---------------------------------------------------------
+                        $subRequest = [
+                            '_mask' => [
+                                'id',
+                                $relation['label'] . ' AS _label',
+                            ]
+                        ];
+                        $id = [];
+                        if (empty($relation['filter'])) {
+                            $relation['filter'] = 'needed';
+                            foreach ($dataset as $data) {
+                                $id[$data[$field]] = true;
                             }
-
-                            //destroy the model
-                            unset($r[$column]);
+                            $subRequest['id'] = '|IN|' . implode('|', array_keys($id));
                         }
+                        $subMeta = ['minimal' => true];
+                        // ---------------------------------------------------------
+                        // ---------------------------------------------------------
+
+
+
+
+                        
+                        if ($result = $r[$field]->request($subRequest, $subMeta)){
+                            $_stop = microtime(true);
+                            $relations[$field] = [
+                                'relation_lookup_took' => round($_stop - $_start, 5),
+                                'query_took' => $result['query_took'],
+                                'total_rows' => $result['total_rows'],
+                                'structure' => $result['structure'],
+                                'dataset' => $result['dataset'],
+                                'query' => $result['query'],
+                                'filter' => $relation['filter'],
+                                'handle' => $relation['handle'] ?? 'default',
+                            ];
+                        }
+
+                        //destroy the model
+                        unset($r[$field]);
                     }
                 }
             }
@@ -1338,7 +1424,6 @@ $indexCreateString
          */
         $where = '';
         $token = md5(time().rand());
-        $whole_field = '/^[_a-zA-Z]+[_0-9a-zA-Z]*$/';
         $conjunction = empty($meta['or']) ? 'AND' : 'OR';
 
         //2018-10-27: handle exclusive multiples, e.g. WHERE (Hostname LIKE '%abc%' AND Hostname LIKE '%def%')
@@ -1370,115 +1455,142 @@ $indexCreateString
                     (!is_array($request[$field]) && !empty($request[$field]) && !empty(trim($request[$field])))
                 )
             ){
-                $values = is_array($request[$field]) ? $request[$field] : [$request[$field]];
-                $multiple = count($values) > 1;
-
-                $expressedField = !empty($config['alias']) ? $config['expression'] : $field;
-
-                //note only "solid" field values get prepended table_alias
-                $prefix = (!empty($config['table_alias']) && preg_match($whole_field, $expressedField) ? $config['table_alias'].'.' : '');
-
-                if($multiple) $where .= ($where ? ' ' . $conjunction . ' ' : '') . '(';
-
-                $i = 0;
-                foreach($values as $value){
-                    $i++;
-
-                    $value = trim($value);
-
-                    if(substr($value,0,1) === '|'){
-                        $value = substr($value,1);
-                        $value = str_replace('\|', $token, $value);
-                        $value = explode('|', $value);
-                        foreach($value as $n => $v){
-                            $value[$n] = str_replace($token, '|', $v);
-                        }
-                        //format is relationship|value1[|value2|value3 etc..]
-
-                        //simply means we don't search on this
-                        //2018-10-21 <sfullman@presidio.com> I am not sure this is used in the code..
-                        //if(strtolower($value[0] === 'null')) continue;
-
-                        if($multiple){
-                            $conj = in_array($expressedField, $exclusive_multiples) ? 'AND' : 'OR';
-                        }else{
-                            $conj = $conjunction;
-                        }
-                        $where .= ($where && !($multiple && $i === 1) ? ' ' . $conj .' ':'');
-                        $where .= $prefix . $expressedField;
-
-                        if(strtolower($value[0]) === 'between') {
-                            if (strlen(trim($value[1])) && strlen(trim($value[2]))) {
-                                $where .= ' BETWEEN \'' . str_replace("'", '\\\'', $this->prepare_correct_format($config, $value[1])) . '\' AND \'' . str_replace("'", '\\\'', $this->prepare_correct_format($config, $value[2])) . '\'';
-                            } else if (strlen(trim($value[1]))) {
-                                $where .= ' >= \'' . str_replace("'", '\\\'', $this->prepare_correct_format($config, $value[1])) . '\'';
-                            } else if (strlen(trim($value[2]))) {
-                                $where .= ' <= \'' . str_replace("'", '\\\'', $this->prepare_correct_format($config, $value[1])) . '\'';
-                            } else {
-                                //no filter required
-                            }
-                        }else if(strtolower($value[0]) === 'in' || strtolower($value[0]) === 'notin') {
-                            // IN(a, b, ..) or NOT IN(a, b, ..)
-                            $rlx = strtolower($value[0]);
-                            $str = $rlx === 'in' ? ' IN' : ' NOT IN';
-                            $str .= '(';
-                            for ($i = 1; $i < count($value); $i++) {
-                                $val = $value[$i];
-                                if (is_null($val)) {
-                                    $str .= 'NULL, ';
-                                } else {
-                                    $str .= '\'' . str_replace("'", '\\\'', $this->prepare_correct_format($config, $val)) . '\', ';
-                                }
-                            }
-                            $str = rtrim($str, ', ');
-                            $str .= ')';
-                            $where .= $str;
-                        }else if(strtolower($value[0]) === 'is') {
-                            if (is_null($value[1])) {
-                                $where .= ' IS NULL ';
-                            } else {
-                                $where .= ' = ' . '\'' . str_replace("'", '\\\'', $this->prepare_correct_format($config, $value[1])) . '\'';
-                            }
-                        }else if(strtolower($value[0]) === 'null'){
-                            $where .= ' IS NULL';
-                        }else if(strtolower($value[0]) === 'notnull'){
-                            $where .= ' IS NOT NULL';
-                        }else if(strtolower($value[0]) === 'blank'){
-                            //back-enter a left parenthesis
-                            $where = substr($where, 0, strlen($where) - strlen($prefix . $expressedField)) . '(' . $prefix . $expressedField;
-                            $where .= ' IS NULL OR ' . $prefix . $expressedField . ' = \'\')';
-                        }else if(strtolower($value[0]) === 'notblank'){
-                            //back-enter a left parenthesis
-                            $where = substr($where, 0, strlen($where) - strlen($prefix . $expressedField)) . '(' . $prefix . $expressedField;
-                            $where .= ' IS NOT NULL AND ' . $prefix . $expressedField . ' != \'\')';
-                        }else if(in_array(strtolower($value[0]), array_keys($this->comparators))){
-                            $rlx = $this->comparators[strtolower($value[0])];
-                            //remember you can't compare with NULL, gt, lt, etc. don't make any sense so the user will get no results, but we can intervene for not equal - let's change it to IS NOT
-                            if(is_null($value[1]) && $rlx === '!='){
-                                $where .= ' IS NOT NULL';
-                            }else{
-                                $where .= $rlx . '\'' . str_replace("'", '\\\'', $this->prepare_correct_format($config, $value[1])) . '\'';
-                            }
-                        }else{
-                            // no action yet
-                            exit('unrecognized relationship key');
-                        }
-                    }else{
-                        if($multiple){
-                            $conj = in_array($expressedField, $exclusive_multiples) ? 'AND' : 'OR';
-                        }else{
-                            $conj = $conjunction;
-                        }
-                        $where .= ($where && !($multiple && $i === 1)? ' ' . $conj .' ':'');
-                        $where .= $prefix . $expressedField;
-                        $where .= ' LIKE \'%' . str_replace("'", '\\\'', $value) . '%\'';
-                    }
-                }
-                //close parenthesis on field group
-                if($multiple) $where .= ')';
+                // run process below
             }else{
                 continue;
             }
+
+
+            // handle relationship joins, name the joined field or expression and the needed joined table
+            if (!empty($request['_relations'][$field]) &&
+                $relation = $this->selectFieldRelation($request['_relations'][$field])
+            ) {
+
+                // we assume that the value is expressed in the selected relation
+                $tableAlias = 't' . (count($this->joins) + 1);
+                $this->joins[] = [
+                    'alias' => $tableAlias,
+                    'table' => $this->tempAliasToActualTableName($relation['identifier']),
+                    'on' => [
+                        [
+                            'root' => 'r.' . $field
+                        ],
+                    ],
+                ];
+                $expressedField = $this->convertStringExpressionToJoinedTable($relation['label'], $tableAlias);
+            } else {
+                $expressedField = !empty($config['alias']) ? $config['expression'] : $field;
+            }
+
+            $values = is_array($request[$field]) ? $request[$field] : [$request[$field]];
+            $multiple = count($values) > 1;
+
+
+            //note only "solid" field values get prepended table_alias
+            $prefix = (
+                !empty($config['table_alias']) && preg_match('/^' . $this->whole_field . '$/', $expressedField) ?
+                    $config['table_alias'].'.' :
+                    ''
+            );
+
+            if($multiple) $where .= ($where ? ' ' . $conjunction . ' ' : '') . '(';
+
+            $i = 0;
+            foreach($values as $value){
+                $i++;
+
+                $value = trim($value);
+
+                if(substr($value,0,1) === '|'){
+                    $value = substr($value,1);
+                    $value = str_replace('\|', $token, $value);
+                    $value = explode('|', $value);
+                    foreach($value as $n => $v){
+                        $value[$n] = str_replace($token, '|', $v);
+                    }
+                    //format is relationship|value1[|value2|value3 etc..]
+
+                    //simply means we don't search on this
+                    //2018-10-21 <sfullman@presidio.com> I am not sure this is used in the code..
+                    //if(strtolower($value[0] === 'null')) continue;
+
+                    if($multiple){
+                        $conj = in_array($expressedField, $exclusive_multiples) ? 'AND' : 'OR';
+                    }else{
+                        $conj = $conjunction;
+                    }
+                    $where .= ($where && !($multiple && $i === 1) ? ' ' . $conj .' ':'');
+                    $where .= $prefix . $expressedField;
+
+                    if(strtolower($value[0]) === 'between') {
+                        if (strlen(trim($value[1])) && strlen(trim($value[2]))) {
+                            $where .= ' BETWEEN \'' . str_replace("'", '\\\'', $this->prepare_correct_format($config, $value[1])) . '\' AND \'' . str_replace("'", '\\\'', $this->prepare_correct_format($config, $value[2])) . '\'';
+                        } else if (strlen(trim($value[1]))) {
+                            $where .= ' >= \'' . str_replace("'", '\\\'', $this->prepare_correct_format($config, $value[1])) . '\'';
+                        } else if (strlen(trim($value[2]))) {
+                            $where .= ' <= \'' . str_replace("'", '\\\'', $this->prepare_correct_format($config, $value[1])) . '\'';
+                        } else {
+                            //no filter required
+                        }
+                    }else if(strtolower($value[0]) === 'in' || strtolower($value[0]) === 'notin') {
+                        // IN(a, b, ..) or NOT IN(a, b, ..)
+                        $rlx = strtolower($value[0]);
+                        $str = $rlx === 'in' ? ' IN' : ' NOT IN';
+                        $str .= '(';
+                        for ($i = 1; $i < count($value); $i++) {
+                            $val = $value[$i];
+                            if (is_null($val)) {
+                                $str .= 'NULL, ';
+                            } else {
+                                $str .= '\'' . str_replace("'", '\\\'', $this->prepare_correct_format($config, $val)) . '\', ';
+                            }
+                        }
+                        $str = rtrim($str, ', ');
+                        $str .= ')';
+                        $where .= $str;
+                    }else if(strtolower($value[0]) === 'is') {
+                        if (is_null($value[1])) {
+                            $where .= ' IS NULL ';
+                        } else {
+                            $where .= ' = ' . '\'' . str_replace("'", '\\\'', $this->prepare_correct_format($config, $value[1])) . '\'';
+                        }
+                    }else if(strtolower($value[0]) === 'null'){
+                        $where .= ' IS NULL';
+                    }else if(strtolower($value[0]) === 'notnull'){
+                        $where .= ' IS NOT NULL';
+                    }else if(strtolower($value[0]) === 'blank'){
+                        //back-enter a left parenthesis
+                        $where = substr($where, 0, strlen($where) - strlen($prefix . $expressedField)) . '(' . $prefix . $expressedField;
+                        $where .= ' IS NULL OR ' . $prefix . $expressedField . ' = \'\')';
+                    }else if(strtolower($value[0]) === 'notblank'){
+                        //back-enter a left parenthesis
+                        $where = substr($where, 0, strlen($where) - strlen($prefix . $expressedField)) . '(' . $prefix . $expressedField;
+                        $where .= ' IS NOT NULL AND ' . $prefix . $expressedField . ' != \'\')';
+                    }else if(in_array(strtolower($value[0]), array_keys($this->comparators))){
+                        $rlx = $this->comparators[strtolower($value[0])];
+                        //remember you can't compare with NULL, gt, lt, etc. don't make any sense so the user will get no results, but we can intervene for not equal - let's change it to IS NOT
+                        if(is_null($value[1]) && $rlx === '!='){
+                            $where .= ' IS NOT NULL';
+                        }else{
+                            $where .= $rlx . '\'' . str_replace("'", '\\\'', $this->prepare_correct_format($config, $value[1])) . '\'';
+                        }
+                    }else{
+                        // no action yet
+                        exit('unrecognized relationship key');
+                    }
+                }else{
+                    if($multiple){
+                        $conj = in_array($expressedField, $exclusive_multiples) ? 'AND' : 'OR';
+                    }else{
+                        $conj = $conjunction;
+                    }
+                    $where .= ($where && !($multiple && $i === 1)? ' ' . $conj .' ':'');
+                    $where .= $prefix . $expressedField;
+                    $where .= ' LIKE \'%' . str_replace("'", '\\\'', $value) . '%\'';
+                }
+            }
+            //close parenthesis on field group
+            if($multiple) $where .= ')';
         }
         return $where;
     }
@@ -1941,5 +2053,136 @@ $indexCreateString
         $str .= strtolower(chr( 64 + rand(1, 26)));
         $str .= strtolower(chr( 64 + rand(1, 26)));
         return $str;
+    }
+
+    /**
+     * Give a setting of multiple possible relation arrays for a given column select the best one based on user preferences
+     * and locale preferences.  Allows for the best dataset of id, label and other meta information for the FE to present
+     * in replacement for the foreign key field.
+     *
+     * This is checked thoroughly as it's user-creatable
+     *
+     * @param $relations
+     * @param array $config
+     * @return array|bool
+     */
+    public function selectFieldRelation($relations, $config = []){
+
+        // This is intended so that for example an admin can configure multiple data relations for a field and
+        // a non-admin can simply select a handle for best fit.
+        $handle = 'default';
+
+        if (!is_array($relations)) {
+            return false;
+        }
+        $selectees = [];
+
+        // Select which relation is best for mapping data to field
+        foreach ($relations as $relation) {
+            if (count($relations) === 1) {
+                // selected by default
+                break;
+            }
+            if (!empty($relations['handle']) && strtolower($relations['handle']) === strtolower($handle)) {
+                // selected by declaring handle = default
+                break;
+            }
+            $selectees[] = $relation;
+        }
+
+        if (!empty($selectees)) {
+            $relation = $selectees[0];
+        }
+
+        // Validate selectee - identifier and label are required
+        // todo: replace !is_string() with an actual parser of what the user could send
+            // sys:sys_table                table group and table name
+            // ec1234ab                     table key
+            // financial_client             literal table name when keyed as such
+
+        if (empty($relation['identifier']) || !is_string($relation['identifier'])) {
+            // the identifier doesn't map to an actual data object
+            return false;
+        }
+        if (empty($relation['label']) || !is_string($relation['label'])) {
+            return false;
+        }
+        return $relation;
+    }
+
+    /**
+     * Security feature, uses alias and not table
+     *
+     * @param $joins
+     * @param array $config
+     * @return string
+     */
+    protected function joinsToSQLString($joins, $config = []) {
+        /*
+         * Example of format:
+        $joins = [
+            [
+                'type' => 'LEFT',                   // default if not specified
+                'table' => 'actual_table_name',
+                'alias' => 't2',
+                'on' => [
+                    [
+                        'root' => 'r.table_id',
+                        'rlx' => '=',               // default if not specified
+                        'key' => 'id'
+                    ]
+                ],
+            ]
+        ];
+
+        */
+        if (empty($joins)) return '';
+
+        $string = PHP_EOL;
+        foreach ($joins as $join) {
+
+            $string .= ($join['type'] ?? 'LEFT') . ' JOIN ' . $join['table'] . ' ' . $join['alias'] . ' ON ';
+            $ons = [];
+            foreach ($join['on'] as $on) {
+                $ons[] = $on['root'] . ' ' .($on['rlx'] ?? '=') . ' ' . $join['alias'] . '.' . ($on['key'] ?? 'id');
+            }
+            $string .= implode(' AND ', $ons) . PHP_EOL;
+        }
+
+        return $string;
+    }
+
+    /**
+     * Converts a string e.g. CONCAT(r.firstName, ' ', r.lastName) to CONCAT(t2.firstName, ' ', t2.lastName)
+     *
+     * @param $expression
+     * @param $tableAlias
+     * @return mixed
+     */
+    protected function convertStringExpressionToJoinedTable($expression, $tableAlias) {
+        // todo: this needs to be configurable
+        $rootTableAlias = 'r';
+        $expression = preg_replace('/\b' . $rootTableAlias . '\.(' . $this->whole_field . ')/', $tableAlias . '.$1', $expression);
+        return $expression;
+    }
+
+    protected $joins = [];
+
+    public $whole_field = '[_a-zA-Z]+[_0-9a-zA-Z]*';
+
+    /**
+     * === REMOVE THIS METHOD AFTER MERGING IN SAAS CHANGES ===
+     * @param $identifier
+     * @return mixed
+     */
+    public function tempAliasToActualTableName($identifier) {
+        $query = $this->cnx->query("SELECT * FROM sys_table WHERE '$identifier' IN(table_name, table_key)");
+        $result = $query->getResultArray();
+        $data = $result[0];
+        if ($data['literal']) {
+            return $data['table_name'];
+        } else {
+            exit('not developed');
+        }
     }
 }

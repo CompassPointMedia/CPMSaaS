@@ -29,6 +29,15 @@ class DataApi extends \App\Controllers\Modules\Saas\Data
 
         $request = $this->request->getPost();
 
+        // Prepare special request items
+        $injectConfig = ['direct_access' => 'allow'];
+        if (!empty($request['_relations'])) {
+            $injectConfig['relations'] = $request['_relations'];
+        }
+
+        $data->inject($this->actualTableName($tableRecord), $injectConfig);
+
+
         $results = $data->request($request);
 
         /**

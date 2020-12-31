@@ -1468,9 +1468,11 @@ $indexCreateString
 
                 // we assume that the value is expressed in the selected relation
                 $tableAlias = 't' . (count($this->joins) + 1);
+                $table = $this->loadAccountTables(str_replace('-', '_', $relation['identifier']));
+
                 $this->joins[] = [
                     'alias' => $tableAlias,
-                    'table' => $this->tempAliasToActualTableName($relation['identifier']),
+                    'table' => $this->actualTableName($table),
                     'on' => [
                         [
                             'root' => 'r.' . $field
@@ -2169,20 +2171,4 @@ $indexCreateString
     protected $joins = [];
 
     public $whole_field = '[_a-zA-Z]+[_0-9a-zA-Z]*';
-
-    /**
-     * === REMOVE THIS METHOD AFTER MERGING IN SAAS CHANGES ===
-     * @param $identifier
-     * @return mixed
-     */
-    public function tempAliasToActualTableName($identifier) {
-        $query = $this->cnx->query("SELECT * FROM sys_table WHERE '$identifier' IN(table_name, table_key)");
-        $result = $query->getResultArray();
-        $data = $result[0];
-        if ($data['literal']) {
-            return $data['table_name'];
-        } else {
-            exit('not developed');
-        }
-    }
 }

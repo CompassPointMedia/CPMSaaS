@@ -10,8 +10,17 @@ class CVT
      */
     private $cnx;
 
+    private $startHash;
+
+    private $endHash;
+
+    private $encoding = false;
+
+
     public function __construct($cnx) {
         $this->cnx = $cnx;
+        $this->startHash = md5(time().rand());
+        $this->endHash = strrev($this->startHash);
     }
 
     /**
@@ -115,40 +124,39 @@ var injector = {
         // todo: table_access - this is intended for who can modify the config bit, not really relevant here
         // todo: have JS functions not be entirely inside quotes and treated as string, use $methodHash
 
-        $startHash = md5(time().rand());
-        $endHash = strrev($startHash);
-        $encoding = false;
 
         foreach ($results as $a) {
             if (!$a['active']) {
                 continue;
             }
 
+            $value = $this->isCode($a['value'], $a['node'], $a['attribute']);
+
             switch (true) {
                 // Grab this first
                 case $a['node'] === 'lazy':
-                    $encoding = true;
                     if (empty($config['lazy'])) {
-                        $config['lazy'] = [ $startHash . $a['value'] . $endHash ];
+                        $config['lazy'] = [ $value ];
                     } else {
-                        $config['lazy'][] = $startHash . $a['value'] . $endHash;
+                        $config['lazy'][] = $value;
                     }
                     break;
                 case $a['item_type'] === 'configuration';
-                    $config[$a['node']][$a['path']][$a['field_name']][$a['attribute']] = $a['value'];
+                    $config[$a['node']][$a['path']][$a['field_name']][$a['attribute']] = $value;
                     break;
             }
         }
         $configString = json_encode($config);
-        if ($encoding) {
-            preg_match_all('/"' . $startHash . '(.*)' . $endHash . '"/', $configString, $matches);
+        if ($this->encoding) {
+            preg_match_all('/"' . $this->startHash . '(.*)' . $this->endHash . '"/', $configString, $matches);
             foreach ($matches[0] as $match) {
                 // do surgery to expose the code
-                $str = str_replace('"' . $startHash, '', $match);
-                $str = str_replace($endHash . '"', '', $str);
+                $str = str_replace('"' . $this->startHash, '', $match);
+                $str = str_replace($this->endHash . '"', '', $str);
                 $str = str_replace('\n', "\n", $str);
                 $str = str_replace('\r', "\r", $str);
                 $str = str_replace('\t', "\t", $str);
+                $str = str_replace('\/', "/", $str);
                 // this is probably very fallible but should work for most things. todo: figure out a backslash sequence like \\" that would break this
                 $str = str_replace('\"', '"', $str);
                 $configString = str_replace($match, $str, $configString);
@@ -156,5 +164,19 @@ var injector = {
         }
         $string = 'var sys_table_config = ' . (empty($config) ? '{}' : $configString) . ';' . PHP_EOL;
         return $string;
+    }
+
+    /**
+     * @param $value
+     * @param $node
+     * @param $attribute
+     * @return string
+     */
+    public function isCode($value, $node, $attribute) {
+        if ($attribute === 'relation' || $node === 'lazy' || substr(trim($value), 0, 1) === '{' || substr(trim($value), 0, 1) === '[') {
+            $this->encoding = true;
+            return $this->startHash . $value . $this->endHash;
+        }
+        return $value;
     }
 }

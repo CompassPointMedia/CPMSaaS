@@ -24,9 +24,7 @@ class DataApi extends \App\Controllers\Modules\Saas\Data
             // Error T09
             throw new \App\Exceptions\GeneralFault(9);
         }
-
-        $data->inject($this->data->actualTableName($tableRecord), ['direct_access' => 'allow']);
-
+        
         $request = $this->request->getPost();
 
         // Prepare special request items
@@ -35,7 +33,7 @@ class DataApi extends \App\Controllers\Modules\Saas\Data
             $injectConfig['relations'] = $request['_relations'];
         }
 
-        $data->inject($this->actualTableName($tableRecord), $injectConfig);
+        $data->inject($this->data->actualTableName($tableRecord), $injectConfig);
 
 
         $results = $data->request($request);

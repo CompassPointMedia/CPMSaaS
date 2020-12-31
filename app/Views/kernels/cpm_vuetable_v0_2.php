@@ -375,8 +375,7 @@ Object.defineProperties(window, {
 Vue.use(VeeValidate);
 
 Vue.component('generic_display', {
-    /* layout = layout.columns, layout.columnsToShow and layout.orderBy */
-	props: [ 'layout', 'column_structure', 'column', 'value' ],
+	props: [ 'layout', 'column_structure', 'column', 'value' ], // layout.columns{} layout.columnsToShow[] layout.orderBy{}
 	template: '<span><span v-if="text() && value" v-html="nl2br(value)"></span><span v-else :class="output(value, true) ? \'cpm-blank\' : \'\'">{{ output(value) }}</span></span>',
 	methods: {
 		output: function(value, isBlank){
@@ -405,7 +404,6 @@ Vue.component('generic_display', {
 });
 
 Vue.component('generic_input', {
-    /* layout = layout.columns, layout.columnsToShow and layout.orderBy */
 	props: [ 'layout', 'column_structure', 'column', 'value' ],
 	template: '<span><input v-model:string="value" v-on:input="emitChange" :placeholder="placeholder()" v-bind:maxlength="maxlength()" v-on:change="emitChange" class="form-control" v-validate="rules" :name="column" />' +
 	'<p class="is-danger" v-show="errors.has(column)" v-if="rules !== {}">{{ errors.first(column) }}</p>' +
@@ -816,21 +814,29 @@ Vue.component('generic-cell', {
 	props: ['datarow', 'index', 'field', 'val'],
 	template: '<span :class="style()" @dblclick="single_field_edit()">{{ format(val) }}</span>',
     methods: {
+		/**
+         * todo:
+         * It says that format is also found on the backend for exports - update the relations part of it - can I even export now?
+         *
+         *
+		 *
+		 */
 		//---------- note: format is also found on the backend for exports --------
 		format: function(val){
-            if(val === null){
+            if (val === null){
             	val = '';
             }
+            var field = this.field, parentData = this.$parent.$data;
 
-            if(this.$parent.$data.layout.columns[this.field]){
-            	var layout = this.$parent.$data.layout.columns[this.field];
+            if (parentData.layout.columns[field]){
+            	var layout = parentData.layout.columns[field];
             	if(typeof layout.transform === 'function'){
             		return layout.transform(val, this.datarow);
                 }
             }
 
-			if(this.$parent.$data.structure[this.field]){
-                var structure = this.$parent.$data.structure[this.field];
+			if (parentData.structure[field]){
+                var structure = parentData.structure[field];
                 if(structure.intent === 'date' || structure.intent === 'datetime' || structure.intent === 'time' || structure.intent === 'timestamp'){
                 	val = createDate(val);
                 	if(!val.getDate || isNaN(val.getDate())){
@@ -856,28 +862,36 @@ Vue.component('generic-cell', {
             }
 
             //translate value based on relationship
-            if(this.$parent.$data.relations[this.field]){
-				var i, primary, display, relation = this.$parent.$data.relations[this.field];
+            if (parentData.relations[field]) {
+				var i, primary, label, relation = parentData.relations[field];
 				//what field to relate to - currently only field is primary key
                 primary = this.$parent.db.getPrimary(relation.structure, 'string');
 
                 //what field to display - currently only first text string
-                display = this.$parent.db.getLabel(relation.structure);
+                if (typeof parentData.layout.columns[field] !== 'undefined' &&
+					typeof parentData.layout.columns[field].relation !== 'undefined') {
+                	// we assume it would have been presented in this way
+                	label = '_label';
+                } else {
+                	// this should be deprecated
+					label = this.$parent.db.getLabel(relation.structure);
+                }
 
-                for(i in relation.dataset){
-                	if(val == relation.dataset[i][primary]){
-                		return relation.dataset[i][display]
+                for (i in relation.dataset){
+                	// note that eg. 3 == "3"
+                	if (val == relation.dataset[i][primary]) {
+                		return relation.dataset[i][label]
                     }
                 }
             }
-            if(this.$parent.$data.settings.maxCharactersPerCell && typeof val.length !== 'undefined' && val.length > this.$parent.$data.settings.maxCharactersPerCell){
-				return val.substring(0, this.$parent.$data.settings.maxCharactersPerCell) + '...';
+
+            if (parentData.settings.maxCharactersPerCell && typeof val.length !== 'undefined' && val.length > parentData.settings.maxCharactersPerCell){
+				return val.substring(0, parentData.settings.maxCharactersPerCell) + '...';
             }
             if(val === ''){
-            	if(typeof this.$parent.$data.layout.columns !== 'undefined' &&
-					typeof this.$parent.$data.layout.columns[this.field] !== 'undefined'){
-					if(this.$parent.$data.layout.columns[this.field].blankReplacementOnRead){
-						return this.$parent.$data.layout.columns[this.field].blankReplacementOnRead;
+            	if(typeof parentData.layout.columns[field] !== 'undefined'){
+					if(parentData.layout.columns[field].blankReplacementOnRead){
+						return parentData.layout.columns[field].blankReplacementOnRead;
 					}
                 }
             }
@@ -963,7 +977,7 @@ Vue.component('cvt', {
 	props: ['depth', 'dependency', 'datarow','injector'],
     template: <?php echo stringize('cvt', $compile);?>,
     data: function(){
-        console.log('i am data, injector should be present');
+        // console.log('i am data, injector should be present');
     	var native = {
             // ---------- user-added values; feel free to add what you want ------------ //
             userConfig: {},
@@ -1065,13 +1079,14 @@ Vue.component('cvt', {
         return mergeDeep(native, injector);
     },
     mounted: function() {
-        console.log('i am mounted');
+        // console.log('i am mounted');
     },
     beforeCreate: function() {
-        console.log('i am before create');
+        // console.log('i am before create');
     },
     created: function () {
-    	console.log('i am created');
+    	// console.log('i am created');
+
     	//add common validations as extension of Vee-Validate
 		this.$validator.extend('numeric_general', {
 			validate: function(value, _args){
@@ -1277,6 +1292,14 @@ Vue.component('cvt', {
         if(this.layout.orderBy && !request_obj.orderBy){
         	request_obj.orderBy = this.layout.orderBy;
         }
+
+        // get any user-defined relations for searching and sorting
+		for (var i in this.layout.columns) {
+			if (this.layout.columns[i].relation) {
+                if (!request_obj._relations) request_obj._relations = {};
+				request_obj._relations[i] = this.layout.columns[i].relation;
+			}
+		}
 
 		//STORE request string - this will convert orderBy pipe notation to objects
         //2018-10-25: used to do this with field parameters also but no longer
@@ -1631,9 +1654,9 @@ Vue.component('cvt', {
             }
 
             //break association with request
-			if(typeof updates === 'undefined') updates = {};
-            for(i in this.request){
-				if(this.layout.columns[i] && this.layout.columns[i].searchAlias){
+			if (typeof updates === 'undefined') updates = {};
+            for (i in this.request) {
+				if(this.layout.columns[i] && this.layout.columns[i].searchAlias) {
 					name = this.layout.columns[i].searchAlias;
 				}else{
 					name = i;
@@ -1646,7 +1669,16 @@ Vue.component('cvt', {
 				request[name] = subj;
 			}
 
-            if(clear){
+			// get any user-defined relations for searching and sorting
+			for (i in this.layout.columns) {
+				if (this.layout.columns[i].relation) {
+					if (!request._relations) request._relations = {};
+					request._relations[i] = this.layout.columns[i].relation;
+				}
+			}
+
+
+			if (clear) {
 				//@todo: use a definition of "meta" requests on clear, and keep these
                 orderBy = updates.orderBy ? updates.orderBy : (this.request.orderBy ? this.request.orderBy : orderBy);
                 //Clear the request, but preserve orderBy and pass it to params also
@@ -1720,6 +1752,8 @@ Vue.component('cvt', {
 						self.dataset = json.dataset;
 						//structure is a server-side element, update it
                         if(json.structure) self.structure = json.structure;
+
+                        if(json.relations) self.relations = json.relations;
 
                         if(typeof self.observerPostDataReload === 'function'){
                         	self.observerPostDataReload(self);
@@ -2485,9 +2519,9 @@ Vue.component('cvt', {
                     return primary;
                 },
                 getLabel: function(structure){
-        			var i, label = null;
+        			var label = null;
         			for(var i in structure){
-        				if(label = null) label = structure[i].name;
+        				if(label == null) label = structure[i].name;
         				if(structure[i].type.match(/char/)){
         					return structure[i].name;
                         }

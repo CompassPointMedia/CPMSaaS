@@ -116,6 +116,13 @@ class Data extends Model{
                 'name' => $dataGroupOrTable,
                 'root_table' => $dataGroupOrTable,
                 'direct_access' => true,
+                'defaults' => [
+                    'edit_time' => [
+                        'create' => [
+                            'value' => null
+                        ],
+                    ]
+                ]
             ];
 
             // Approved list of injectors for a dataGroup which can be passed by meta
@@ -812,9 +819,9 @@ class Data extends Model{
                             //2018-07-29 <sfullman@presidio.com> pass this field and overall request; allows for calculated values to be returned
                             $insert[$n] = $action->$method($n, $request);
 
-                        }else if(!empty($default['value'])){
+                        }else if(array_key_exists('value', $default)){
                             //this is a static value, or constant, or may have been set to some value like page_key by the constructor
-                            $insert[$n] = $default['value'];
+                            $insert[$n] = is_null($default['value']) ? null : $default['value'];
                         }else{
                             continue;
                         }

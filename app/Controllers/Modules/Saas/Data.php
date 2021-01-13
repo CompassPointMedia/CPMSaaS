@@ -66,7 +66,8 @@ class Data extends \App\Controllers\BaseController
         );
 
         $config = $this->cvt->dataGroupJavascriptConfigV1(
-            $table['table_key']
+            $table['table_key'],
+            $this->data->structure($this->data->actualTableName($table))
         );
 
         echo view('pages/data_view', [

@@ -141,6 +141,7 @@ class SaaSController extends \App\Controllers\BaseController implements \CodeIgn
                 $this->controllerConstructor = $this;       // in my view all of the controllers will take
 
             } else {
+                return false;
                 // Error T04
                 // todo: just build more, but yeah log this
                 // todo: if it's the index page, that's going to need to ONLY be account login

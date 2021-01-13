@@ -25,9 +25,13 @@ $Theme = 'darkly';
 
 $login = $_SESSION['login'] ?? [];
 
-if(!function_exists('get_uri_from_page_title')) {
-    function get_uri_from_page_title($x) {
-        return $x;
+if (! function_exists('get_uri_from_page_title')) {
+    function get_uri_from_page_title($string) {
+        $string = strtolower(trim($string));
+        $string = preg_replace('/[^a-z0-9_ -]/', '', $string);
+        $string = preg_replace('/[ ]/', '-', $string);
+        $string = preg_replace('/[-]{2,}/', '-', $string);
+        return $string;
     }
 }
 
@@ -69,122 +73,91 @@ if(!function_exists('get_uri_from_page_title')) {
             <!-- bs theme: nav, navbar-nav -->
             <ul class="nav navbar-nav">
                 <?php
-                $Admin = 'Y';
-
-
-                $query   		= $dbMaster->query("SELECT * FROM v1_menu_navbar WHERE active = 'Y' ORDER BY display_order ASC");
+                $sql        = "SELECT * FROM v1_menu_navbar ORDER BY display_order ASC";
+                $query   	= $dbMaster->query($sql);
                 $results   	= $query->getResultArray();
 
-                foreach ($results as $Row) {
-                    $ThisNavID    		= $Row['nav_id'];
-                    $MenuTitle    		= (!empty($Row['menu_title']) ? $Row['menu_title'] : '');
-                    $DropDown    		= $Row['dropdown'];
-                    $LinkName    		= $Row['link_name'];
-                    $DisplayOrder  	 	= $Row['display_order'];
-                    $HyperLink    		= $Row['hyperlink'];
-                    $AdminMenu    		= $Row['admin_menu'];
-                    $Target    			= $Row['target'];
-                    $Target      	 	= !empty($Target) ? 'target="_'.$Target.'"' : '';
+                if (!empty($login['active']) && !empty($login['accounts'][$subdomain])) {
+                    $sql        = "SELECT 
+                        CONCAT('local-', g.id) id,
+                        g.name,
+                        g.description title,
+                        CONCAT('/data/group/', g.identifier) url,
+                        g.id display_order,
+                        '' img_source
+                        FROM sys_data_object_group g JOIN sys_data_object o ON g.id = o.group_id
+                        GROUP BY g.id ORDER BY g.id";
+                    $query = $dbAccounts[$subdomain]->query($sql);
+                    $resultsLocal = $query->getResultArray();
 
-                    if($HyperLink === 'index.php') $HyperLink = '/';
-
-                    if($AdminMenu == 'Y' && $Admin != 'Y'){
-                        continue;
+                    if (!empty($resultsLocal)) {
+                        $results = array_merge($results, $resultsLocal);
                     }
-                    if($DropDown == 'Y'){
-                        if ($LinkName === 'Data Objects') {
-                            $Results3 = [];
-                            // Tables only shown if logged in, and by permission
-                            if (!empty($login['active']) && !empty($login['accounts'][$subdomain])) {
+                }
 
-                                $roles = $login['accounts'][$subdomain]['roles'];
-
-                                $query = $dbAccounts[$subdomain]->query("SELECT
-                                t.title link_name,
-                                '1' display_order,
-                                CONCAT('/data/view/', t.table_key) hyperlink,
-                                '' target,
-                                t.title page_title,
-                                '' img_source
-                                FROM sys_table t 
-                                                                
-                                ORDER BY t.title");
-                                $Results3 = $query->getResultArray();
-
-                                $Results3 = array_merge($Results3, [
-                                    [
-                                        'link_name' => 'Manage Data Objects',
-                                        'hyperlink' => '/data/manage',
-                                        'display_order' => 1000,
-                                        'target' => '',
-                                        'page_title' => '',
-                                        'img_source' => '',
-                                    ], [
-                                        'link_name' => 'Add Data Object',
-                                        'hyperlink' => '/data/create',
-                                        'display_order' => 1000,
-                                        'target' => '',
-                                        'page_title' => '',
-                                        'img_source' => '',
-                                    ]
-                                ]);
-                            }
-                            $Results3   = array_merge(
-                                $Results3,
+                foreach ($results as $row) {
+                    if ($row['name'] === 'Data Objects') {
+                        $results2 = [];
+                        // Tables only shown if logged in, and by permission
+                        if (!empty($login['active']) && !empty($login['accounts'][$subdomain])) {
+                            $results2 = [
                                 [
-                                    [
-                                        'link_name' => 'Data Object Help',
-                                        'hyperlink' => '/data/help',
-                                        'display_order' => 1000,
-                                        'target' => '',
-                                        'page_title' => '',
-                                        'img_source' => '',
-                                    ]
+                                    'name'          => 'Manage Data Objects',
+                                    'url'           => '/data/manage',
+                                    'display_order' => 1000,
+                                    'img_source'    => '',
+                                ], [
+                                    'name'          => 'Add Data Object',
+                                    'url'           => '/data/create',
+                                    'display_order' => 1000,
+                                    'img_source'    => '',
                                 ]
-                            );
-                        } else {
-                            $query 		= $dbMaster->query("SELECT
-                            m.*, s.page_title, b.img_source
-                            FROM v1_menu_items m 
-                            LEFT JOIN v1_menu_switch s ON s.id = m.switch_id
-                            LEFT JOIN v1_menu_buttonbar b ON m.switch_id = b.page_id
-                            WHERE nav_id = '$ThisNavID'
-                            ORDER BY display_order, link_name");
-                            $Results3	= $query->getResultArray();
+                            ];
                         }
-                    }else{
-                        $Results3 = [];
+
+                        $results2 = array_merge(
+                            $results2,
+                            [
+                                [
+                                    'name'          => 'Data Object Help',
+                                    'url'           => '/data/help',
+                                    'display_order' => 1000,
+                                    'img_source'    => '',
+                                ]
+                            ]
+                        );
+                    } else if (substr($row['id'], 0, 6) === 'local-') {
+                        $query    = $dbAccounts[$subdomain]->query("SELECT
+                                t.title name,
+                                t.description title,
+                                CONCAT('/data/view/', t.table_key) url,
+                                '' img_source
+                                FROM sys_data_object t 
+                                WHERE group_id = '" . str_replace('local-', '', $row['id']) . "'                              
+                                ORDER BY t.title");
+                        $results2 = $query->getResultArray();
+                    } else {
+                        $query 		= $dbMaster->query("SELECT m.* FROM v1_menu_items m WHERE nav_id = '" . $row['id'] . "' ORDER BY display_order");
+                        $results2	= $query->getResultArray();
                     }
 
-
-                    ?><li <?php if (! empty($Results3)) echo 'class="has-children"'; ?>><a href="<?php echo $HyperLink;?>" <?php echo $Target;?>><?php echo $LinkName;?></a>
+                    ?><li<?php if (! empty($results2)) echo ' class="has-children"'; ?>><a<?php echo !empty($row['title']) ? ' title="' . htmlentities($row['title']) . '"' : ''?> href="<?php echo $row['url']?>"><?php echo $row['name'];?></a>
                     <?php
-                    if (count($Results3) > 0){
+                    // Subnav items
+                    if (count($results2) > 0){
                         ?><ul class="dropdown-menu submenu sub-nav"><?php
-                        foreach ($Results3 as $Row) {
-                            $LinkName    		= $Row['link_name'];
-                            $DisplayOrder  	 	= $Row['display_order'];
-                            $HyperLink    		= $Row['hyperlink'];
-                            $Target    			= $Row['target'];
-                            $MenuPageTitle      = $Row['page_title'];
-                            $ImgSource          = $Row['img_source'];
-                            if(trim($HyperLink)){
-                                $href = $HyperLink;
-                            }else if($MenuPageTitle){
-                                $href = get_uri_from_page_title($MenuPageTitle);
-                            }else{
-                                continue;
-                            }
+                        foreach ($results2 as $row2) {
                             $class = '';
-                            if(substr(strtolower($href), 0, 5) === 'http:' || substr(strtolower($href), 0, 6) === 'https:'){
-                                $class = ' class="trackable-external-link-' . get_uri_from_page_title($LinkName) . '"';
+                            if(substr(strtolower($row2['name']), 0, 5) === 'http:' || substr(strtolower($row2['name']), 0, 6) === 'https:'){
+                                $external = true;
+                                $class = ' class="trackable-external-link-' . get_uri_from_page_title($row2['name']) . '"';
+                            } else {
+                                $external = false;
                             }
-                            $target      	    = !empty($Target) || $class ? ' target="_'.($Target ? $Target : 'blank').'"' : '';
-
-                            ?><li><a href="<?php echo $href;?>" <?php echo $class . $target;?>><?php
-                                echo $LinkName;
-                                if ($ImgSource){
-                                    ?><span class="link-icon"><img src="<?php echo $ImgSource;?>" style="<?php echo stristr($invertImageThemes, $Theme) ? 'filter: invert(100%);"' : '';?>" /></span><?php
+                            ?><li><a<?php echo !empty($row2['title']) ? ' title="' . htmlentities($row2['title']) . '"' : ''?> href="<?php echo strlen($row2['url']) ? $row2['url'] : '/sample/' . get_uri_from_page_title($row2['name']);?>" <?php echo $class;?><?php echo $external ? ' target="_blank"' : ''?>><?php
+                                echo $row2['name'];
+                                if ($row2['img_source']){
+                                    ?><span class="link-icon"><img src="<?php echo $row2['img_source'];?>" style="<?php echo stristr($invertImageThemes, $Theme) ? 'filter: invert(100%);"' : '';?>" /></span><?php
                                 }
                                 ?></a></li><?php
                         }

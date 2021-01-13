@@ -39,15 +39,18 @@ class Data extends \App\Controllers\BaseController
     }
 
     /**
-     * @vetted
+     * Designed to pick up either the table of a data group, or the table directly, and present it using CVT
      *
+     * @vetted
      * @param string $object
      * @param string $layout - unused
      */
     public function view($object = '', $layout = '') {
 
         // Verify object is correct, table exists and user has access to table - see SaasController::validateSubdomain and ::validateUserAccessToSubdomain
-        $table = $this->data->loadAccountTables(str_replace('-', '_', $object));
+        $dataGroupDefinition = $this->data->fetchDataGroup($object);
+
+        $table = $this->data->loadAccountTables((int) $dataGroupDefinition->rootDataObject['id']);
 
         $access = $this->data->validateUserAccessToTable($table['table_name'], $this->subdomain);
 
@@ -57,16 +60,12 @@ class Data extends \App\Controllers\BaseController
         }
 
         //------------ CPMSAAS-7 -------------
-        if (trim($table['js_config_main'])) {
-            $javascript = trim($table['js_config_main']);
-        } else {
-            $javascript = $this->cvt->dataObjectJavascriptV2(
-                $table['table_key'],
-                $this->data->structure($this->data->actualTableName($table))
-            );
-        }
+        $javascript = $this->cvt->dataGroupJavascriptV2(
+            $table['table_key'],
+            $this->data->structure($this->data->actualTableName($table))
+        );
 
-        $config = $this->cvt->dataObjectJavascriptConfigV1(
+        $config = $this->cvt->dataGroupJavascriptConfigV1(
             $table['table_key']
         );
 
@@ -102,9 +101,5 @@ class Data extends \App\Controllers\BaseController
             'tables' => $this->data->dataObjects,
             'tableKeys' => $this->data->dataObjectKeys,
         ]);
-    }
-
-    public function export() {
-        exit('data export');
     }
 }

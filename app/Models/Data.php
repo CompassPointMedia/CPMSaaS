@@ -12,6 +12,13 @@ namespace App\Models;
  */
 
 use CodeIgniter\Model;
+use App\Exceptions\GeneralFault;
+use App\Libraries\IntKey;
+use App\Libraries\StringKey;
+use App\Libraries\SaasArray;
+use Box\Spout\Writer\WriterFactory;
+use Box\Spout\Common\Type;
+use PHPUnit\Framework\Exception;
 
 class Data extends Model{
 
@@ -27,6 +34,8 @@ class Data extends Model{
         'datetime' => ['/^[0-9]{4}-[0-9]{2}-[0-9]{2}( [0-9]{2}:[0-9]{2}([0-9]{2})*)*$/', 'Y-m-d H:i:s'],
     ];
 
+    public $defaultDateFormatHuman = 'F jS, Y g:iA';
+
     public $genericSqlNumberFields = 'int|integer|bigint|mediumint|smallint|tinyint|dec|decimal|float|double';
 
     public $pre_process_error = '';
@@ -38,6 +47,15 @@ class Data extends Model{
     public $dataGroup;
 
     public $dataGroups = [];
+
+    public $processJoinedRootTableFirst = true;
+
+    public $filePath = '';
+
+    /**
+     * @var $request SaasArray
+     */
+    public $request;
 
     /**
      * @var array $dataObjects
@@ -51,25 +69,31 @@ class Data extends Model{
     protected $dataObjectKeys = [];
 
     /**
+     * Maps id to lowercase of table name
+     * @var array $dataObjectIds
+     */
+    protected $dataObjectIds = [];
+
+    /**
      * Data constructor.
      * @param CodeIgniter\Database\MySQLi\Connection $cnx
      */
     public function __construct($cnx) {
 
         $this->cnx = $cnx;
-
+        $this->filePath = APPPATH . '../writable/files/';
         /*
 
-        todo: reinstate this - consider it part of this class
-        //load models as necessary
-        $this->load->model('Security_model');
+         todo: reinstate this - consider it part of this class
+         //load models as necessary
+         $this->load->model('Security_model');
 
-        //because we often join one row to another table row for more information, and group by the unique key of the first row, I
-        //see no reason not to easily pick non-grouped-by fields from the first row.
-        //https://stackoverflow.com/questions/23921117/disable-only-full-group-by
-        $this->cnx->query("SET GLOBAL sql_mode=(SELECT REPLACE(@@sql_mode,'ONLY_FULL_GROUP_BY',''))");
+         //because we often join one row to another table row for more information, and group by the unique key of the first row, I
+         //see no reason not to easily pick non-grouped-by fields from the first row.
+         //https://stackoverflow.com/questions/23921117/disable-only-full-group-by
+         $this->cnx->query("SET GLOBAL sql_mode=(SELECT REPLACE(@@sql_mode,'ONLY_FULL_GROUP_BY',''))");
 
-        */
+         */
 
     }
 
@@ -125,6 +149,8 @@ class Data extends Model{
      *      limitOverride: as implied, override any LIMIT clause (even if [limitStart and] limitRange are passed)
      */
     public function request($request, $meta = []){
+
+        $this->request = new SaasArray($request);
 
         // streamline calls when we don't need items like $relations, $validation, $security etc.
         $minimal = !empty($meta['minimal']);
@@ -331,8 +357,8 @@ class Data extends Model{
                         $_start = microtime(true);
                         $r[$field] = new self($this->cnx);
 
-
-                        $r[$field]->inject($relation['identifier'], ['direct_access' => 'allow']);
+                        $relation_root_table = $this->actualTableName($this->fetchDataGroup($relation['identifier'])->rootDataObject);
+                        $r[$field]->inject($relation_root_table, ['direct_access' => 'allow']);
 
 
                         //get the data with limited additional information
@@ -1035,7 +1061,7 @@ class Data extends Model{
                 'status_message' => 'Please enter a valid table name',
             ];
         } else {
-            $sql = "SELECT * FROM sys_table WHERE table_name = '". addslashes($tableName) . "' AND table_group = '" . addslashes($tableGroup). "'";
+            $sql = "SELECT * FROM sys_data_object WHERE table_name = '". addslashes($tableName) . "'";
             $query = $this->cnx->query($sql);
             $result = $query->getResultArray();
             if (!empty($result[0])) {
@@ -1082,10 +1108,8 @@ class Data extends Model{
 
         $tableKey = $this->generateTableKey();
         $actualTableName = $this->actualTableName([
-            'table_group' => $tableGroup ?? 'common',
             'table_name' => $tableName,
             'table_key' => $tableKey,
-            'literal' => 0,
         ]);
         $tableNameString = $trial ? $tableName : $actualTableName;
 
@@ -1096,7 +1120,6 @@ class Data extends Model{
 $fieldCreateString
 $indexCreateString
 ) $tableMetaString";
-        $sql = str_replace('CURRENT TIMESTAMP', 'CURRENT_TIMESTAMP', $sql);
 
         if (!$trial) {
             // actually create the table
@@ -1106,15 +1129,17 @@ $indexCreateString
             $initialConfig = str_replace(':"false"', ':false', $initialConfig);
             $initialConfig = str_replace(':"true"', ':true', $initialConfig);
 
-            // enter the table in sys_table
-            $sys_table_insert = "INSERT INTO sys_table SET 
-            table_group = '" . addslashes($tableGroup) . "', 
+            $group_id = $this->fetchOrCreateTableGroup($tableGroup)['id'];
+
+            // enter the table in sys_data_object
+            $sys_data_object_insert = "INSERT INTO sys_data_object SET 
+            group_id = '$group_id', 
             title = '" . addslashes($title) . "',
             description = '" . addslashes($description) . "',
             table_name = '" . addslashes($tableName) . "',
             table_key = '" . addslashes($tableKey) . "',
             initial_config = '" . addslashes($initialConfig) . "'";
-            $this->cnx->query($sys_table_insert);
+            $this->cnx->query($sys_data_object_insert);
 
             $status_message = "CREATE TABLE executed successfully: $tableName";
             $message = []; // todo: develop this
@@ -1141,6 +1166,26 @@ $indexCreateString
          *      6. show any existing table in edit mode in this interface
          *      7. handle MYSQL table length limits
          */
+    }
+
+    /**
+     * This is a very hackable and temporary method
+     * @new
+     * @created 2021-01-09
+     *
+     * @param $nameOrId
+     * @return mixed
+     */
+    public function fetchOrCreateTableGroup($nameOrId) {
+        $query = $this->cnx->query("SELECT * FROM sys_data_object_group WHERE '" . addslashes($nameOrId) . "' IN(id, name)");
+        if (($result = $query->getResultArray()) && !empty($result[0])) {
+            return $result[0];
+        } else {
+            if (!preg_match('/^[0-9]+$/', $nameOrId)) exit('Group name must not be a number');
+            $sql = "INSERT INTO sys_data_object_group SET name = '" . addslashes($nameOrId) . "'";
+            $result = $this->cnx->query($sql);
+            return $result->connID->insert_id;
+        }
     }
 
     /**
@@ -1399,7 +1444,7 @@ $indexCreateString
      */
     public function assign_key($id) {
         $table_key = $this->generateTableKey();
-        $this->cnx->query("UPDATE sys_table SET table_key = '$table_key' WHERE id = $id AND table_key IS NULL");
+        $this->cnx->query("UPDATE sys_data_object SET table_key = '$table_key' WHERE id = $id AND table_key IS NULL");
     }
 
     public function query_builder($request, $structure, $meta) {
@@ -1446,6 +1491,30 @@ $indexCreateString
         }
 
         foreach($structure as $field => $config){
+
+            // handle relationship joins, name the joined field or expression and the needed joined table
+            if (!empty($request['_relations'][$field]) &&
+                $relation = $this->selectFieldRelation($request['_relations'][$field])
+            ) {
+
+                // we assume that the value is expressed in the selected relation
+                $tableAlias = 't' . (count($this->joins) + 1);
+
+                $this->joins[] = [
+                    'alias' => $tableAlias,
+                    'table' => $this->actualTableName($this->fetchDataGroup($relation['identifier'])->rootDataObject),
+                    'on' => [
+                        [
+                            'field' => $field,
+                            'root_alias' => 'r',
+                        ],
+                    ],
+                ];
+                $expressedField = $this->convertStringExpressionToJoinedTable($relation['label'], $tableAlias);
+            } else {
+                $expressedField = !empty($config['alias']) ? $config['expression'] : $field;
+            }
+
             // Note: we can also handle arrays (non-associative)
             if(
                 isset($request[$field]) &&
@@ -1458,30 +1527,6 @@ $indexCreateString
                 // run process below
             }else{
                 continue;
-            }
-
-
-            // handle relationship joins, name the joined field or expression and the needed joined table
-            if (!empty($request['_relations'][$field]) &&
-                $relation = $this->selectFieldRelation($request['_relations'][$field])
-            ) {
-
-                // we assume that the value is expressed in the selected relation
-                $tableAlias = 't' . (count($this->joins) + 1);
-                $table = $this->loadAccountTables(str_replace('-', '_', $relation['identifier']));
-
-                $this->joins[] = [
-                    'alias' => $tableAlias,
-                    'table' => $this->actualTableName($table),
-                    'on' => [
-                        [
-                            'root' => 'r.' . $field
-                        ],
-                    ],
-                ];
-                $expressedField = $this->convertStringExpressionToJoinedTable($relation['label'], $tableAlias);
-            } else {
-                $expressedField = !empty($config['alias']) ? $config['expression'] : $field;
             }
 
             $values = is_array($request[$field]) ? $request[$field] : [$request[$field]];
@@ -1608,6 +1653,7 @@ $indexCreateString
         if(empty($orderBy)) return '';
 
         if(!is_array($orderBy)){
+            // Here we have a |field|ASC|field2|DESC format.  Fields will be checked against $structure below
             if(substr($orderBy,0,1) === '|'){
                 $token = md5(time().rand());
                 $order = 'ASC';
@@ -1657,13 +1703,16 @@ $indexCreateString
                     return $orderBy;
                 }else{
                     //log "unparsable ORDER BY statement assumed good"
-                    log_message('info', 'unparsable ORDER BY statement "' . $orderBy . '" assumed good');
+                    log_message('info', 'unparsable ORDER BY statement assumed good: "' . $orderBy . '"');
                 }
                 return $orderBy;
             }
         }
         $str = '';
         $fieldMap = [];
+        $defaultPath = [new IntKey, 'handle'];
+        $joins = $this->sArray($this->joins);
+        $joinFieldPath = [new IntKey, 'on', new IntKey, 'field'];
         foreach($structure as $field => $config){
             $fieldMap[strtolower($field)] = $config;
         }
@@ -1679,7 +1728,22 @@ $indexCreateString
                 continue;
             }
 
-            $str .= ($str ? ', ' : '') . (is_numeric($n) ? $v : (stristr($v, 'BIN') ? 'BINARY ' : '') . $n . ' ' . str_replace('BIN', '', $v));
+            // If relations are present for this field, replace with the requested label
+            // Admittedly this is a crazy set of commands but if it never fails regardless of user input, that is a plus
+            if (
+                ($label = $this->sVal(
+                    $this->request->_relations->{$n}->fetchSection($defaultPath, 'default', 2, SaasArray::RELATIONSHIP_VALUE)->label)
+                ) &&
+                ($alias = $this->sVal(
+                    $joins->fetchSection($joinFieldPath, $n, 2, SaasArray::RELATIONSHIP_VALUE)->alias)
+                )
+            ) {
+                // hack-alert: fix this
+                $label = preg_replace('/\br\./', $alias . '.', $label);
+                $str .= ($str ? ', ' : '') . (is_numeric($n) ? $v : (stristr($v, 'BIN') ? 'BINARY ' : '') . $label . ' ' . str_replace('BIN', '', $v));
+            } else {
+                $str .= ($str ? ', ' : '') . (is_numeric($n) ? $v : (stristr($v, 'BIN') ? 'BINARY ' : '') . $n . ' ' . str_replace('BIN', '', $v));
+            }
         }
         return $str;
     }
@@ -1970,15 +2034,19 @@ $indexCreateString
         if (!$this->dataObjects || $override) {
             $this->dataObjectKeys = [];
             $this->dataObjects = [];
-            $result = $this->cnx->query("SELECT * FROM sys_table");
+            $result = $this->cnx->query("SELECT * FROM sys_data_object");
             if ($a = $result->getResultArray()) {
                 foreach ($a as $v) {
                     $this->dataObjects[strtolower($v['table_name'])] = $v;
                     $this->dataObjectKeys[strtolower($v['table_key'])] = $v['table_name'];
+                    $this->dataObjectIds[$v['id']] = strtolower($v['table_name']);
                 }
             }
         }
 
+        if (is_int($tableOrKey)) {
+            return $this->dataObjects[$this->dataObjectIds[$tableOrKey]];
+        }
         if ($tableOrKey) {
             $tableOrKey = strtolower($tableOrKey);
             return $this->dataObjects[$tableOrKey] ?? (!empty($this->dataObjectKeys[$tableOrKey]) ? $this->dataObjects[$this->dataObjectKeys[$tableOrKey]] : null);
@@ -2026,23 +2094,13 @@ $indexCreateString
     }
 
     /**
-     * Data Objects (tables) are stored in sys_table.  Both the table name and table key are unique.  The table_group can be any value, with the
-     * default being `common`.
-     */
-
-    /**
      * Convention for naming user tables
      *
      * @param $tableRow
      * @return string
      */
     public function actualTableName($tableRow) {
-        if ($tableRow['literal'] == 1) {
-            return $tableRow['table_name'];
-        }
-        return implode('_', [
-            'pub', $tableRow['table_group'], $tableRow['table_name'], $tableRow['table_key']
-        ]);
+        return $tableRow['table_name'];
     }
 
     /**
@@ -2098,7 +2156,7 @@ $indexCreateString
 
         // Validate selectee - identifier and label are required
         // todo: replace !is_string() with an actual parser of what the user could send
-            // sys:sys_table                table group and table name
+            // sys:sys_data_object          table group and table name
             // ec1234ab                     table key
             // financial_client             literal table name when keyed as such
 
@@ -2129,7 +2187,8 @@ $indexCreateString
                 'alias' => 't2',
                 'on' => [
                     [
-                        'root' => 'r.table_id',
+                        'root_alias' => 'r',
+                        'field' => 'table_id',
                         'rlx' => '=',               // default if not specified
                         'key' => 'id'
                     ]
@@ -2146,7 +2205,7 @@ $indexCreateString
             $string .= ($join['type'] ?? 'LEFT') . ' JOIN ' . $join['table'] . ' ' . $join['alias'] . ' ON ';
             $ons = [];
             foreach ($join['on'] as $on) {
-                $ons[] = $on['root'] . ' ' .($on['rlx'] ?? '=') . ' ' . $join['alias'] . '.' . ($on['key'] ?? 'id');
+                $ons[] = $on['root_alias'] . '.' . $on['field'] . ' ' .($on['rlx'] ?? '=') . ' ' . $join['alias'] . '.' . ($on['key'] ?? 'id');
             }
             $string .= implode(' AND ', $ons) . PHP_EOL;
         }
@@ -2171,4 +2230,277 @@ $indexCreateString
     protected $joins = [];
 
     public $whole_field = '[_a-zA-Z]+[_0-9a-zA-Z]*';
+
+    /**
+     * @param $request
+     * @return mixed
+     */
+    public function export($request) {
+        //parse front-end JavaScript settings
+        $request['orderBy'] = empty($request['orderBy']) ? '' : json_decode($request['orderBy'], true);
+        $columnsToShow = !empty($request['columnsToShow']) ? json_decode($request['columnsToShow'], true) : [];
+        $share = !empty($request['share']) ? json_decode($request['share'], true) : [];
+
+        $exportAs = !empty($share['exportAs']) ? $share['exportAs'] : '';
+
+        if($exportAs !== 'link') $results = $this->request($request, ['limitOverride' => true]);
+
+        $key = substr(md5(rand() . time()), 0, 8);
+
+        if($exportAs === 'xlsx' || $exportAs === 'csv') {
+
+            $file = $this->filePath . $exportAs . '-' . $key . '.' . $exportAs;
+
+            $headings = [];
+            foreach ($results['structure'] as $col => $null) {
+                if (!empty($share['exportOnlyColumnsShown']) && !empty($columnsToShow) && !in_array($col, $columnsToShow)) continue;
+                $headings[] = camelCase(snakeCase($col));
+            }
+
+            if($exportAs === 'xlsx'){
+                if (!class_exists('ZipArchive')) {
+                    // Error T13
+                    throw new \App\Exceptions\GeneralFault(13);
+                }
+
+                if (!class_exists('Box\Spout\Writer\XLSX\Writer')) {
+                    // Error T14
+                    throw new \App\Exceptions\GeneralFault(14);
+                }
+                $writer = WriterFactory::create(Type::XLSX);
+                $writer->openToFile($file); // write data to a file or to a PHP stream
+                //$writer->openToBrowser($fileName); // stream data directly to the browser
+                $writer->addRow($headings);
+            } else {
+                $output = [$headings];
+                $fp = fopen($file, 'w');
+            }
+
+            if (!empty($results['dataset'])) {
+                foreach ($results['dataset'] as $row) {
+                    if (!empty($share['exportOnlyColumnsShown']) && !empty($columnsToShow)) {
+                        foreach ($row as $col => $val) {
+                            if (!in_array($col, $columnsToShow)) {
+                                unset($row[$col]);
+                                continue;
+                            }
+                            if (!empty($results['structure'][$col]['intent'])) {
+                                if ($results['structure'][$col]['intent'] === 'datetime') {
+                                    $row[$col] = createDate($val, $this->defaultDateFormatHuman);
+                                }
+                            }
+                        }
+                    }
+                    if ($exportAs === 'xlsx') {
+                        $writer->addRow($row);
+                    } else {
+                        $output[] = $row;
+                    }
+                }
+            } else {
+                $noRecordsRow = ['No records were found based on your criteria'];
+                if($exportAs === 'xlsx') {
+                    //write not-available row
+                    $writer->addRow($noRecordsRow);
+                } else {
+                    $output[] = $noRecordsRow;
+                }
+            }
+
+            if($exportAs === 'xlsx') {
+                $writer->close();
+            } else {
+                fwrite($fp, array_to_csv($output));
+                fclose($fp);
+            }
+
+        } else if($exportAs === 'link'){
+            if (true) {
+                exit('link not developed; it will be developed as part of a url shortening service in SAAS');
+                $request['request'] = end($original);
+                $request = json_encode($request);
+                $settings = str_replace("'", "\\'", $request);
+                $settings = str_replace("\\\"", "\\\\\"", $settings);
+                $sql = "INSERT INTO master.share_links SET
+            username = '". $_SESSION['UserName'] . "',
+            public = ".(!empty($share['report']) && isset($share['public']) ? "'" . $share['public'] . "'" : 'NULL').",
+            name = " . (!empty($share['report']) && !empty($share['reportName']) ? "'" . str_replace("'", "\\'", $share['reportName']) . "'" : 'NULL') . ",
+            description = " . (!empty($share['report']) && !empty($share['reportDescription']) ? "'" . str_replace("'", "\\'", $share['reportDescription']) . "'" : 'NULL') . ",
+            token = '$key',
+            settings = '$settings'";
+                $data->cnx->query($sql);
+
+
+                return $this->output
+                    ->set_content_type('application/json')
+                    ->set_status_header(200)
+                    ->set_output(json_encode(
+                        [
+                            'key' => $key,
+                            'exportAs' => $exportAs,
+                            'link' => get_client_url(['suppressPort' => true]) . '/api/share/link?' . $key,
+                        ]
+                    ));
+            }
+        }
+        // todo: this could be either a table label or table key - standardize to the table_key value
+        // todo: handle garbage collection
+        $filename = 'Export_' . $request['request'] . '-' . date('Y-m-d@H-i-s') . '[' . count($results['dataset']) . '-records].' . $exportAs;
+        return [
+            'key' => $key,
+            'exportAs' => $exportAs,
+            'filename' => $filename,
+        ];
+    }
+
+    /**
+     * Return a data group definition by a unique string such as my-application, identifier such as ec1298gz, or id such as 7985
+     * The latter id method is discouraged.  If an int id is passed, it MUST be the id in sys_data_group, not sys_data_object
+     *
+     * @param string $dataGroup
+     * @param string $disposition
+     * @param DataGroupDefinition|NULL $dataGroupDefinition
+     * @return DataGroupDefinition
+     */
+    public function fetchDataGroup(string $dataGroup, $disposition = '', DataGroupDefinition $dataGroupDef = null, $skipInheritance = false) {
+        /**
+         * todo:
+         *      do we set this in this class' state or not.
+         * We can allow table_id to be present, or the table_id of the latest ancestor, OR the root table in any of that inheritance path
+         */
+        $key = $dataGroup;
+
+        // Create an initial instance of the Definition
+        $new = false;
+        if ($dataGroupDef === null) {
+            $new = true;
+            $dataGroupDef = new DataGroupDefinition();
+        }
+
+        if ($disposition === 'table') {
+            if ($dataGroupDef->rootDataObject) {
+                // root data object (i.e. table) has been defined, take no action
+                return $dataGroupDef;
+            }
+
+            if ($rootDataObject = $this->fetchDataObject($dataGroup)) {
+                $dataGroupDef->rootDataObject = $rootDataObject;
+            }
+
+            // table fetch portion is now complete
+            return $dataGroupDef;
+        }
+
+
+        $sql = "SELECT g.*, xref.child_object_type, xref.child_object_id
+        FROM sys_data_group g 
+        LEFT JOIN sys_data_group_xref xref ON g.id = xref.data_group_id AND xref.child_object_relationship = 'root table'
+        WHERE '$key' IN (g.id, g.group_key, g.group_label)
+        ";
+        $query = $this->cnx->query($sql);
+        if ($record = $query->getResultArray()) {
+            if (count($record) > 1) {
+                throw new GeneralFault(12, $dataGroup);
+            }
+            $record = $record[0];
+            /*
+             * we will have the following:
+             * if table_id and a joined record we log an alert to what appears to be a misconfiguration
+             * if joined record we either take it if a dataObject, or query again if a dataGroup
+             *
+             */
+
+            if ($disposition === 'inheritance') {
+                if (!$skipInheritance) {
+                    $dataGroupDef->pushToInheritance($record);
+                }
+            } else {
+                $dataGroupDef->setDataGroup($record);
+            }
+
+            // ------- value of bool processJoinedRootTableFirst determines which of these two run first ---------
+            if (!$dataGroupDef->rootDataObject) {
+                if (!$this->processJoinedRootTableFirst) goto processTableIdFirst;
+
+                processTableIdFirstAlternate:
+                if ($record['child_object_id']) {
+                    if ($record['table_id']) {
+                        // this appears to be a misconfiguration
+                        // todo: log message
+                    }
+
+                    if ($record['child_object_type'] === 'sys_data_object') {
+                        $dataGroupDef->rootDataObject = $dataGroupDef->rootDataObject ?? $this->loadAccountTables((int)$record['child_object_id']);
+                    } else if ($record['child_object_type'] === 'sys_data_group') {
+                        $dataGroupDef->rootDataObject =
+                            $dataGroupDef->rootDataObject ?? $this->fetchDataGroup(
+                            // we are going to pass as if this is a root request; the presence of the dataGroup and lack of `inheritance` will be enough cue.
+                                $record['child_object_id'], null, $dataGroupDef, true
+                            )->rootDataObject;
+                    }
+                }
+                if (!$this->processJoinedRootTableFirst) goto afterProcess;
+
+                processTableIdFirst:
+                if ($record['table_id']) {
+                    $dataGroupDef->rootDataObject =
+                        $dataGroupDef->rootDataObject ?? $this->fetchDataGroup(
+                            $record['table_id'], 'table', $dataGroupDef
+                        )->rootDataObject;
+                }
+                if (!$this->processJoinedRootTableFirst) goto processTableIdFirstAlternate;
+
+                afterProcess:
+            }
+            // ---------------------------------------------------------------------------------------------------
+            if ($record['data_group_id']) {
+                // We are checking for inheritance but skip it if we're ascending up a table_group branch for a joined root table data_group
+                $dataGroupDef = $this->fetchDataGroup($record['data_group_id'], 'inheritance', $dataGroupDef, $skipInheritance);
+            }
+        }
+
+        /**
+         * todo:
+         *  DONE    0. test with loadAccountTables
+         *  DONE    00. turn DGD into a __call getter and setter based on type - do something cool, and this becomes the progenitor of my tooling class
+         *  DONE    1. have non inheritance classes omitted
+         *  DONE    2. experiment with the table value being in different places
+         *  DONE    3. if I can't find anything in dataGroup and this is initial, see if I can find anything in sys_data_object
+         *  4. finalize the rules for objects and lose the whole group concept for tables but keep it in terms of user-friendly organization
+         *  5. finish all the way to the initial view() load and the api/data/select load and etc.
+         *  6. is actualTableName affected?
+         */
+
+        if ($new && empty($dataGroupDef->rootDataObject)) {
+            // one last try
+            $dataGroupDef = $this->fetchDataGroup($dataGroup, 'table', $dataGroupDef);
+        }
+        return $dataGroupDef;
+    }
+
+    /**
+     * Very important method, contains the logic for how a URI string can fetch a rootDataObject record
+     * @param string $key
+     * @return bool
+     */
+    public function fetchDataObject(string $key) {
+        $sql = "SELECT t.* FROM sys_data_object t WHERE '$key' IN(t.id, t.table_name, t.table_key, t.table_label)";
+        $query = $this->cnx->query($sql);
+        if ($record = $query->getResultArray()) {
+            return $record[0];
+        }
+        return false;
+    }
+
+    /**
+     * @param $subject
+     * @return SaasArray
+     */
+    public function sArray($subject, $config = []) {
+        return new SaasArray($subject, $config);
+    }
+
+    public function sVal($value) {
+        return SaasArray::value($value);
+    }
 }

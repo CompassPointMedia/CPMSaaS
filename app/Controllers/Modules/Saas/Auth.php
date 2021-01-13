@@ -203,9 +203,9 @@ class Auth extends BaseController {
             $cnx = $this->dbAccounts[$account['identifier']] = \Config\Database::connect($template);
 
             // todo: this try-catch is not shielding from the error I'm getting in CodeIgniter and of course that is something like:
-            //      Table 'cpmsaas_T019D4965RS.sys_table' doesn't exist - which provides way too much information (but that's in dev)
+            //      Table 'cpmsaas_T019D4965RS.sys_data_object' doesn't exist - which provides way too much information (but that's in dev)
             try {
-                $query = $cnx->query('EXPLAIN sys_table');
+                $query = $cnx->query('EXPLAIN sys_data_object');
                 $results = $query->getResultArray();
                 if (count($results) < 8) {
                     // Error T06

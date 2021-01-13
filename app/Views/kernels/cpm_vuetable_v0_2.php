@@ -14,8 +14,8 @@ if (typeof injector === 'undefined') {
 	injector = {};
 }
 
-if (typeof sys_table_config === 'object') {
-	injector = mergeDeep(injector, sys_table_config);
+if (typeof sys_data_object_config === 'object') {
+	injector = mergeDeep(injector, sys_data_object_config);
 }
 </script>
 
@@ -2059,9 +2059,9 @@ Vue.component('cvt', {
             if(!this.layout.orderBy){
             	this.layout.orderBy = {};
             }
-			//this works OK from Mac and PC
+			// this works OK from Mac and PC
             var build = event.shiftKey;
-            //console.log('ctrl:alt:shift = ' + this.ctrlKey + ':' + this.altKey + ':' + this.shiftKey);
+            // console.log('ctrl:alt:shift = ' + this.ctrlKey + ':' + this.altKey + ':' + this.shiftKey);
             var maxOrderByExpressions = 3;
 			var i, j=1, newOrderBy = {}, firstField = '', firstSort = '';
 
@@ -2373,7 +2373,7 @@ Vue.component('cvt', {
             	return false;
             }
             if(!this.shareURI){
-            	console.log('Error: shareUI has not been defined for this CVT instance');
+            	console.log('Error: shareURI has not been defined for this CVT instance');
             	return false
             }
 			{

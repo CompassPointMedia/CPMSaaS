@@ -46,19 +46,23 @@ Where `X0194859GV` is the value in `sys_account.unique_identifier`, and the user
 Finally, in the `cpmsaas_X0194859GV` account database, create these tables:
 
 ```mysql
--- sys_table
-CREATE TABLE `sys_table` (
+-- Create syntax for TABLE 'sys_data_object'
+CREATE TABLE `sys_data_object` (
   `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
-  `table_access` tinyint(3) unsigned DEFAULT '16',
-  `literal` tinyint(1) unsigned NOT NULL DEFAULT '0' COMMENT 'Use actual table_name value',
-  `table_group` char(30) NOT NULL DEFAULT 'common',
+  `group_id` int(11) unsigned DEFAULT NULL,
   `title` char(75) NOT NULL DEFAULT '',
   `description` text,
   `table_name` char(128) NOT NULL DEFAULT '',
   `table_key` char(12) DEFAULT NULL,
+  `table_label` char(128) DEFAULT NULL COMMENT 'e.g. employee-payroll-category',
+  `table_access` tinyint(3) unsigned DEFAULT '16',
+  `enable_auditing` tinyint(1) unsigned NOT NULL DEFAULT '1',
+  `primary_key_reserved` tinyint(1) unsigned NOT NULL DEFAULT '1',
+  `control_fields_system_managed` tinyint(1) unsigned NOT NULL DEFAULT '1',
+  `version` char(20) DEFAULT 'v0.1 prototype',
   `initial_config` text COMMENT 'PHP array from user creation',
   `css_config_main` text,
-  `js_config_main` text,
+  `create_method` char(30) DEFAULT 'unspecified',
   `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `creator_id` int(11) DEFAULT NULL,
   `edit_time` timestamp NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
@@ -66,14 +70,32 @@ CREATE TABLE `sys_table` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `table_name` (`table_name`),
   UNIQUE KEY `table_key` (`table_key`),
-  KEY `table_group` (`table_group`)
-) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=latin1;
+  UNIQUE KEY `table_label` (`table_label`),
+  KEY `group_id` (`group_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
--- sys_table_config
-CREATE TABLE `sys_table_config` (
+-- Create syntax for TABLE 'sys_data_object_group'
+CREATE TABLE `sys_data_object_group` (
+  `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
+  `name` char(30) NOT NULL DEFAULT '',
+  `identifier` char(30) NOT NULL DEFAULT '',
+  `description` text,
+  `css_config_main` text,
+  `create_method` char(30) DEFAULT 'unspecified',
+  `create_time` datetime DEFAULT CURRENT_TIMESTAMP,
+  `creator_id` int(11) unsigned DEFAULT NULL,
+  `edit_time` timestamp NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+  `editor_id` int(11) unsigned DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `name` (`name`),
+  UNIQUE KEY `identifier` (`identifier`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+-- sys_data_object_config
+CREATE TABLE `sys_data_object_config` (
   `id` int(14) unsigned NOT NULL AUTO_INCREMENT,
-  `table_id` int(11) unsigned DEFAULT NULL,
-  `data_object` char(40) DEFAULT 'default' COMMENT 'Multiple data objects per table, default=default',
+  `object_id` int(11) unsigned DEFAULT NULL COMMENT 'polymorphic on multiple tables',
+  `object_type` enum('sys_data_object','sys_data_group','sys_data_group_xref') NOT NULL DEFAULT 'sys_data_object' COMMENT 'polymorphic on multiple tables',
   `user_id` int(11) unsigned DEFAULT NULL COMMENT 'Null value means global value',
   `locked` tinyint(1) unsigned DEFAULT NULL,
   `item_type` char(50) DEFAULT NULL,
@@ -93,11 +115,59 @@ CREATE TABLE `sys_table_config` (
   KEY `table_id` (`table_id`),
   KEY `data_object` (`data_object`),
   KEY `user_id` (`user_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=13 DEFAULT CHARSET=latin1 COMMENT='Created by Data::create() December 24th, 2020 at 5:14:23PM';
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
+CREATE TABLE `sys_data_group` (
+  `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
+  `table_id` int(11) unsigned DEFAULT NULL,
+  `group_key` char(16) DEFAULT NULL,
+  `group_label` char(64) DEFAULT NULL,
+  `default` tinyint(1) unsigned DEFAULT '1',
+  `data_group_id` int(11) unsigned DEFAULT NULL,
+  `title` char(128) NOT NULL DEFAULT '',
+  `description` text,
+  `create_time` datetime DEFAULT CURRENT_TIMESTAMP,
+  `creator_id` int(11) unsigned DEFAULT NULL,
+  `edit_time` timestamp NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+  `editor_id` int(11) unsigned DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `group_key` (`group_key`),
+  UNIQUE KEY `group_label` (`group_label`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+CREATE TABLE `sys_data_group_xref` (
+  `data_group_id` int(11) unsigned NOT NULL,
+  `child_object_type` enum('sys_data_object','sys_data_group','sys_data_group_xref') NOT NULL DEFAULT 'sys_data_object',
+  `child_object_id` int(11) unsigned NOT NULL,
+  `child_object_relationship` enum('user-defined','root table','dependent table','to be defined') NOT NULL DEFAULT 'to be defined',
+  `create_time` datetime DEFAULT CURRENT_TIMESTAMP,
+  `creator_id` int(11) unsigned DEFAULT NULL,
+  `edit_time` timestamp NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+  `editor_id` int(11) unsigned DEFAULT NULL,
+  PRIMARY KEY (`data_group_id`,`child_object_type`,`child_object_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+CREATE TABLE `sys_changelog` (
+  `id` int(15) unsigned NOT NULL AUTO_INCREMENT,
+  `object_name` char(100) DEFAULT NULL COMMENT 'Reference table',
+  `object_key` int(11) DEFAULT NULL COMMENT 'Reference table id',
+  `data_source` enum('system','user') DEFAULT NULL COMMENT 'Source of entry (system or human)',
+  `type` enum('value change','comment','insert record','delete record') DEFAULT NULL,
+  `creator` char(50) DEFAULT NULL,
+  `affected_element` char(128) DEFAULT NULL COMMENT 'Specifies field(s) affected',
+  `change_from` text,
+  `change_to` text,
+  `comment` text,
+  `create_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `edit_time` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Auto-update; do not touch for normal non-system updates',
+  PRIMARY KEY (`id`),
+  KEY `id` (`id`),
+  KEY `object_key` (`object_key`),
+  KEY `create_time` (`create_time`)
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
 
 ```
 
-sys_tables is minimally required in each account database in order for it to run.
+sys_data_object is minimally required in each account database in order for it to run.
 
 Your setup is now complete; you should be able to go to nwventures.yoursite.com/ and sign in as `jgilmore:easyForHackers` for account `nwventures` (please, change the password MD5).

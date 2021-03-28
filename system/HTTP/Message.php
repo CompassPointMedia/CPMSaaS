@@ -58,7 +58,7 @@ class Message implements MessageInterface
 	/**
 	 * Returns an array containing all headers.
 	 *
-	 * @return array<string,Header> An array of the request headers
+	 * @return array<string, Header> An array of the request headers
 	 *
 	 * @deprecated Use Message::headers() to make room for PSR-7
 	 */
@@ -131,18 +131,5 @@ class Message implements MessageInterface
 	public function getProtocolVersion(): string
 	{
 		return $this->protocolVersion ?? '1.1';
-	}
-
-	/**
-	 * Determines if this is a json message based on the Content-Type header
-	 *
-	 * @return boolean
-	 *
-	 * @deprecated Use header calls directly
-	 */
-	public function isJSON()
-	{
-		return $this->hasHeader('Content-Type')
-			&& $this->header('Content-Type')->getValue() === 'application/json';
 	}
 }

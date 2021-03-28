@@ -12,6 +12,13 @@ namespace App\Models;
  */
 
 use CodeIgniter\Model;
+use App\Exceptions\GeneralFault;
+use App\Libraries\IntKey;
+use App\Libraries\StringKey;
+use App\Libraries\SaasArray;
+use Box\Spout\Writer\WriterFactory;
+use Box\Spout\Common\Type;
+use PHPUnit\Framework\Exception;
 
 class Data extends Model{
 
@@ -27,9 +34,9 @@ class Data extends Model{
         'datetime' => ['/^[0-9]{4}-[0-9]{2}-[0-9]{2}( [0-9]{2}:[0-9]{2}([0-9]{2})*)*$/', 'Y-m-d H:i:s'],
     ];
 
-    public $genericSqlNumberFields = 'int|integer|bigint|mediumint|smallint|tinyint|dec|decimal|float|double';
+    public $defaultDateFormatHuman = 'F jS, Y g:iA';
 
-    public $dataGroup;
+    public $genericSqlNumberFields = 'int|integer|bigint|mediumint|smallint|tinyint|dec|decimal|float|double';
 
     public $pre_process_error = '';
 
@@ -37,291 +44,35 @@ class Data extends Model{
 
     public $comparators = ['lt' => '<', 'le' => '<=', 'gt' => '>', 'ge' => '>=', 'ne' => '!='];
 
+    public $dataGroup;
+
+    public $dataGroups = [];
+
+    public $processJoinedRootTableFirst = true;
+
+    public $filePath = '';
+
     /**
-     * @var array $dataGroups   configuration for all recognized datasets (tables, joins, grouped data, totals/subtotals etc.)
-     *
-     * by being here, a data group is considered "selectable";
-     * insertable, updatable and deletable are always assumed false unless specified as true
-     *
-     * forego_limit: this means 'do not use a limit clause UNLESS [limitStart and] limitRange is/are passed'
+     * @var $request SaasArray
      */
+    public $request;
+
     /**
-     * @todo: move this into the readme.md in CodeIgniter root folder
-     *
-     * 2020-12-19
-     *      update to no longer use _SESSION['UserName'] but the injected session management class
-     *
-     *
-     * 2018-06-17 Sam Fullman <sfullman@presidio.com> How I'd like to see this implemented: "Once you declare `specifically_limited_fields` for a profile, they must be specifically listed or won't be in the input/output.  You can declare `restricted_fields` to just restrict that field.  Neither of these apply to primary key"
-     *
-     * error checking
-     * first of all, it's important to note that we have the user's input and the interpretable/interpreted input.  So the user might enter 6/30/2018 but the actual value is 2018-06-30 in MySQL.
-     * we have implicit and explicit error checking.  We can know via structure a lot about what inputs are allowed, for example:
-     *      alpha cannot go in int, float, etc.
-     *      we know when the input is too long
-     *      we know from enum or set if a value or values is not valid
-     * given <this primary key> and a unique field, we can know if a field entry or update would be valid
-     *      [this should have a live keypress and green check mark UI]
-     * we do not know if a field is required or not, or if it must be a valid email (and we may also want Samuel Fullman <sfullman@presidio.com> which is much more complex than the standard email regexp string)
-     *
-     *
-     * security
-     * Before dataGroups the only implemented security was on the front end; calls to AO could be made by anyone, of any group, with the right parameters.  There was/is a field master.switch.LockDownEdit which was a comma-separated list of which groups could edit for that UI, but this only disabled buttons on the FE; there was no way to coordinate this with the backend.  Also, "edit" in this context meant anything, including CUD-ing a record, or making an AO call that did not touch the record.
-     *
-     * The security node in dataGroups allows me to say "for these modes, users assigned to these groups may perform these action(s)".  The equivalent from the previous system would be:
-     *
-     *  security => [
-     *      access => [
-     *          'create,update,delete,execute:*' => 'front_end_inheritance'
-     *      ]
-     *  ]
-     *
-     * But this can obviously be more fine-grained with this system.  This translates to an FE output of:
-     *
-     *  security: [
-     *      create: true,
-     *      update: true,
-     *      delete: true,
-     *      'execute:*': true,
-     *  ]
-     *
-     * where if any value is not present, it's assumed true.  Note that CVT only uses the CUD parts.
-     *
+     * @var array $dataObjects
      */
-    public $dataGroups = [
-        'request-tracking' => [
-            'updatable' => true,
-            'insertable' => false,
-            'deletable' => false,
-            'root_table' => 'cpmsaas_T018532GF90.pub_common_request_tracking_ec8301qzm605',
-            'datetime' => ['itsm_create_time'],
-            'aliases' => [
-                //hopefully you see what I did there with first-last-first with the comma added..
-                'customer' => "CONCAT(customer_first_name, ' ', customer_last_name, ', ', customer_first_name, ' ', customer_phone_number)",
-            ],
-            /*
-             * in this test we override any structure-based validation on test_2, require 3 fields, and add that test_1 must be in range 50-55
-            'validate' => [
-                'number_test_1' => [
-                    'in' => [50, 51, 52, 53, 54, 55]
-                ],
-            ],
-            'validate_by_rule' => [
-                'required' => [
-                    'itsm_priority', 'itsm_status', 'number_test_1',
-                ],
-                'override' => [
-                    //override means override any natural
-                    'number_test_2'
-                ],
-            ],
-             */
-        ],
-        'requests-distinct-assignee_group' => [
-            'root_table' => 'Request_Tracking.srq_request',
-            'distinct' => true,
-            'lookup_select' => 'IF(assignee_group IS NULL OR assignee_group="", "", assignee_group) AS assignee_group',
-            'base_order_by' => 'IF(assignee_group IS NULL OR assignee_group="", "", assignee_group)',
-        ],
-        'changes' => [
-            'slug' => 'change-tracking',
-            'updatable' => true,
-            'insertable' => false,
-            'deletable' => false,
-            'root_table' => 'Request_Tracking.crq_schedule',
-            'datetime' => ['Received', 'ScheduledStartDate', 'ScheduledEndDate', 'Inserted', 'Updated'],
-        ],
-        'users' => [
-            'root_table' => 'master.users',
-            'base_where' => "Status = 'ACTIVE'",
-            'lookup_select' => 'LastName, FirstName, UserName',
-            'base_order_by' => 'LastName, FirstName, UserName',
-            'limit_start' => 0,
-            'limit_range' => 1000000,
-        ],
-        'crq-risks' => [
-            'root_table' => 'Request_Tracking.crq_risk',
-        ],
-        'broadscope-project-manager' => [
-            'updatable' => true,
-            'insertable' => true,
-            'deletable' => true,
-            'root_table' => 'master.todo',
-            'datetime' => ['create_time', 'edit_time'],
-            'aggregate_changelog' => true,
-            'security' => [
-                'access' => [
-                    'create,update,delete,execute:*' => 'front_end_inheritance',
-                ]
-            ],
-            //@todo: only method node implemented; need a way to say whether this overrides or can be overridden - default is that this overrides
-            'defaults' => [
-                'creator' => [
-                    'create' => [
-                        'method' => 'Security_model:get_user'
-                    ],
-                ],
-                'editor' => [
-                    'update' => [
-                        'method' => 'Security_model:get_user',
-                    ],
-                ],
-            ],
-        ],
-        'pages' => [
-            'slug' => 'broadscope-page-manager',
-            'root_table' => 'master.switch',
-            'updatable' => true,
-            'insertable' => true,
-            'deletable' => false,
-            'aggregate_changelog' => true,
-        ],
-        'itsm_groups' => [
-            'updatable' => false,
-            'insertable' => false,
-            'deletable' => false,
-            'root_table' => 'Request_Tracking.itsm_groups',
-            'base_where' => "Active = 'Y'",
-            'base_order_by' => 'itsm_source, group_name',
-            'lookup_select' => 'ID, group_name',
-        ],
-        'menuitems' => [
-            'updatable' => true,
-            'insertable' => true,
-            'deletable' => true,
-            'root_table' => 'master.MenuItems',
-            'forego_limit' => true,
-            'aggregate_changelog' => true,
-        ],
-        'provision-tracking' => [
-            'updatable' => true,
-            'insertable' => false,
-            'deletable' => false,
-            'root_table' => 'Infrastructure.ProvisionTracking',
-            'pre_process' => [
-                'create,update,delete' => 'Remedy_model:provision_tracking'
-            ],
-            'aggregate_changelog' => true,
-            'relations' => [
-                'Provision_Status_Options_ID' => [
-                    'identifier' => 'provision-status-options'
-                ]
-            ],
-            'security' => [
-                'access' => [
-                    'create,update,delete,execute:*' => 'front_end_inheritance',
-                ]
-            ],
-        ],
-        // 2018-07-24 <sfullman@presidio.com> first use of a view
-        'provision-tracking-oldest-newest' => [
-            'slug' => 'provision-tracking',
-            'updatable' => false,
-            'insertable' => false,
-            'deletable' => false,
-            'root_table' => 'Infrastructure._provision_tracking_oldest_newest',
-            'relations' => [
-                'Provision_Status_Options_ID' => [
-                    'identifier' => 'provision-status-options'
-                ]
-            ],
-            'security' => [
-                'access' => [
-                    'create,update,delete,execute:*' => 'front_end_inheritance',
-                ]
-            ],
-            /*
-             * This forces the primary key in structure, as a view doesn't show the primary key
-             */
-            'structure' => [
-                'ID' => [
-                    'primary_key' => 1,
-                ],
-            ],
-        ],
-        'provision-status-options' => [
-            'root_table' => 'Infrastructure.ProvisionStatusOptions',
-        ],
-        'provision-tracking-tasks' => [
-            'root_table' => 'Infrastructure.ProvisionTasksTracking',
-        ],
-        'analytics' => [
-            'updatable' => false,
-            'insertable' => true,
-            'deletable' => false,
-            'root_table' => 'master.analytics',
-        ],
-        'user' => [
-            'updatable' => true,
-            'insertable' => false,
-            'root_table' => 'master.users',
-            'specifically_limited_fields' => ['settings' => true],
-        ],
-        'schedule-important-dates' => [
-            'updatable' => true,
-            'insertable' => true,
-            'deletable' => true,
-            'root_table' => 'master.schedule_important_dates',
-        ],
-        'sync-manager-servers' => [
-            'root_table' => 'sync_mgr.sync_mgr_servers',
-            'updatable' => true,
-            'insertable' => true,
-            'deletable' => true,
-            'aggregate_changelog' => true,
-        ],
-        'broadridge-acronyms' => [
-            'root_table' => 'master.acronyms',
-            'updatable' => true,
-            'insertable' => true,
-            'deletable' => true,
-        ],
-        'changelog' => [
-            'root_table' => 'sys_changelog',
-        ],
-        'changelog-users' => [
-            'root_table' => 'master._changelog_with_users',
-        ],
-        'automation' => [
-            'root_table' => 'sync_mgr.sync_mgr_automation',
-            'deletable' => true,
-            //todo: get rid of this - CRON simulation
-            'pre_process' => [
-                'read' => 'sync\Sync_model:simulate_cron_call'
-            ],
-        ],
-        '_analytics_by_page_week' => [
-            'root_table' => 'master._analytics_by_page_week',
-        ],
-        '_analytics_by_week_external_links' => [
-            'root_table' => 'master._analytics_by_week_external_links',
-        ],
-        '_analytics_by_week_user_page' => [
-            'root_table' => 'master._analytics_by_week_user_page',
-        ],
-        '_cmdb_main' => [
-            'root_table' => 'Infrastructure._cmdb_main',
-            'structure' => [
-                'ID' => [
-                    'primary_key' => 1,
-                ],
-                'OSType' => [
-                    'type' => 'bigint',
-                ],
-                'TotalPhysicalMemory' => [
-                    'type' => 'bigint',
-                ],
-            ],
-            'aliases' => [
-                // https://stackoverflow.com/questions/2147824/mysql-select-from-table-where-col-in-null-possible-without-or
-                'ITSM_Site' => 'COALESCE(r.ITSM_Site, \'\')',
-                '_GRID' => 'CONCAT(r._CI_Status, r._Primary_Capability)',
-            ],
-        ],
-        'cmdb_software' => [
-            'root_table' => 'Infrastructure.cmdb_software',
-        ],
-    ];
+    protected $dataObjects = [];
+
+    /**
+     * This maps table_key to table_name
+     * @var $dataObjectKeys
+     */
+    protected $dataObjectKeys = [];
+
+    /**
+     * Maps id to lowercase of table name
+     * @var array $dataObjectIds
+     */
+    protected $dataObjectIds = [];
 
     /**
      * Data constructor.
@@ -330,19 +81,19 @@ class Data extends Model{
     public function __construct($cnx) {
 
         $this->cnx = $cnx;
-
+        $this->filePath = APPPATH . '../writable/files/';
         /*
 
-        todo: reinstate this - consider it part of this class
-        //load models as necessary
-        $this->load->model('Security_model');
+         todo: reinstate this - consider it part of this class
+         //load models as necessary
+         $this->load->model('Security_model');
 
-        //because we often join one row to another table row for more information, and group by the unique key of the first row, I
-        //see no reason not to easily pick non-grouped-by fields from the first row.
-        //https://stackoverflow.com/questions/23921117/disable-only-full-group-by
-        $this->cnx->query("SET GLOBAL sql_mode=(SELECT REPLACE(@@sql_mode,'ONLY_FULL_GROUP_BY',''))");
+         //because we often join one row to another table row for more information, and group by the unique key of the first row, I
+         //see no reason not to easily pick non-grouped-by fields from the first row.
+         //https://stackoverflow.com/questions/23921117/disable-only-full-group-by
+         $this->cnx->query("SET GLOBAL sql_mode=(SELECT REPLACE(@@sql_mode,'ONLY_FULL_GROUP_BY',''))");
 
-        */
+         */
 
     }
 
@@ -365,7 +116,21 @@ class Data extends Model{
                 'name' => $dataGroupOrTable,
                 'root_table' => $dataGroupOrTable,
                 'direct_access' => true,
+                'defaults' => [
+                    'edit_time' => [
+                        'create' => [
+                            'value' => null
+                        ],
+                    ]
+                ]
             ];
+
+            // Approved list of injectors for a dataGroup which can be passed by meta
+            $metaInjectors = ['relations'];
+            foreach ($metaInjectors as $injector) {
+                if (!isset($meta[$injector])) continue;
+                $this->dataGroup[$injector] = $meta[$injector];
+            }
             return $this;
         } else if (isset($this->dataGroups[$dataGroupOrTable])) {
             $this->dataGroup = $this->dataGroups[$dataGroupOrTable];
@@ -391,6 +156,8 @@ class Data extends Model{
      *      limitOverride: as implied, override any LIMIT clause (even if [limitStart and] limitRange are passed)
      */
     public function request($request, $meta = []){
+
+        $this->request = new SaasArray($request);
 
         // streamline calls when we don't need items like $relations, $validation, $security etc.
         $minimal = !empty($meta['minimal']);
@@ -445,10 +212,29 @@ class Data extends Model{
             if(!empty($dataGroup['structure'][$n])) $structure[$n] = array_merge($structure[$n], $dataGroup['structure'][$n]);
         }
 
+
+        /*
+         * Handle mask requests
+         *
+         * This is fraught with danger because:
+         * 1. I risk not having expected columns; fields may be needed for calculations
+         * 2. Ironically I may risk security by giving a clue on what is NOT there
+         *
+         */
+        $mask = $maskRequestValid = [];
+        $maskRequest = empty($request['_mask']) ? [] :
+            (is_array($request['_mask']) ? $request['_mask'] : explode(',', trim($request['_mask'])));
+
+
         //nice job, CodeIgniter..
         $result = $this->cnx->query('EXPLAIN ' . $root_table);
         foreach($result->getResultArray() as $v){
             $field = $v['Field'];
+
+            if (in_array($field, $maskRequest)) {
+                $maskRequestValid[] = $field;
+            }
+
             if(substr($v['Type'], 0, 4) === 'enum' || $v['Type'] === 'set'){
                 $enum = explode("','", substr($v['Type'], 6, strlen($v['Type']) - 8));
                 $data_range = [];
@@ -471,6 +257,20 @@ class Data extends Model{
             }
         }
 
+        //mask
+        // if $maskRequestValid < $maskRequest - log a warning
+        // if $maskRequest && !$maskRequestValid - throw an error
+        if ($maskRequestValid) {
+            $mask = $maskRequestValid;
+        }
+
+        // Bug S01 - if the user has control over the mask value, the user can request fields which are not intended
+        // we almost need a library of expressions approved by an admin (e.g. concat(firstName, ' ', lastName) and not
+        // concat(username, ':', password)
+        foreach ($maskRequest as $additional) {
+            // allow expressions
+            if (!preg_match('/^[a-z0-9_]+$/i', $additional)) $mask[] = $additional;
+        }
 
         //allow to hard-set field intent
         foreach(['datetime', 'date', 'time', 'timestamp'] as $key){
@@ -481,6 +281,7 @@ class Data extends Model{
             }
         }
 
+        // Bug S02: this needs a significant amount of improvement; I don't believe it was ever used in Broadridge
         if(!empty($meta['field_list'])){
             $fieldList = $meta['field_list'];
         }else if(!empty($dataGroup['lookup_select'])){
@@ -488,12 +289,22 @@ class Data extends Model{
         }else{
             $fieldList = !empty($dataGroup['field_list']) ? $dataGroup['field_list'] : 'r.*';
         }
+        if ($mask) {
+            $fieldList = implode(', ', $mask);
+        }
 
 
-        // 2018-08-05 <sfullman@presido.com> Added ability to pre_process a request as well as CUD
+        // Adds ability to pre_process a request (R) as well as is done with CUD
         if($this->pre_process('read', $request, [])){
+
             $where = $this->query_builder($request, $structure, $meta);
             $where = 'WHERE 1' . (!empty($dataGroup['base_where']) ? ' AND ' . $dataGroup['base_where'] : '') . ($where ? ' AND (' . $where  . ')' : '');
+
+
+
+            // Bug S03: again, opening up a weakness
+            $joins = $this->joinsToSQLString($this->joins);
+
 
             $orderBy = $this->order_by_builder(
                 !empty($request['orderBy']) ? $request['orderBy'] : (!empty($dataGroup['base_order_by']) ? $dataGroup['base_order_by'] : ''),
@@ -509,6 +320,7 @@ class Data extends Model{
                 
                 FROM
                 $root_table r
+                $joins
                 
                 $where
         
@@ -516,15 +328,11 @@ class Data extends Model{
                 
                 $limit";
             $query = $this->cnx->query($sql);
-            //echo '<pre>' . $sql . '</pre>';
 
             $stop = microtime(true);
             $query_took = round($stop - $start, 5);
 
-            $dataset = [];
-            foreach ($query->getResultArray() as $n=>$v){
-                $dataset[$n] = $v;
-            }
+            $dataset = $query->getResultArray();
 
             $query = $this->cnx->query('SELECT FOUND_ROWS() AS `Count`');
             $total_rows = $query->getRow()->Count;
@@ -541,33 +349,71 @@ class Data extends Model{
             }
 
             //fulfill relationships if present
-            if (!$minimal){
+            if (!$minimal && (!empty($this->dataGroup['relations']))){
                 $relations = [];
-                if (!empty($this->dataGroup['relations'])){
-                    foreach ($this->dataGroup['relations'] as $column => $v){
-                        if ($v['identifier']){
-                            //instantiate a new Data model
-                            //note that we may have or need more than one of them open for some type of cross-interaction
-                            $_start = microtime(true);
-                            $r[$column] = new \Data_model();
-                            $r[$column]->inject($v['identifier']);
 
-                            //get the data with limited additional information
-                            if ($result = $r[$column]->request([], ['minimal' => true])){
-                                $_stop = microtime(true);
-                                $relations[$column] = [
-                                    'relation_lookup_took' => round($_stop - $_start, 5),
-                                    'query_took' => $result['query_took'],
-                                    'total_rows' => $result['total_rows'],
-                                    'structure' => $result['structure'],
-                                    'dataset' => $result['dataset'],
-                                    'query' => $result['query'],
-                                ];
+                foreach ($this->dataGroup['relations'] as $field => $relationSet){
+                    if (empty($structure[$field])) {
+                        // todo: log that a non-available relation was requested
+                        continue;
+                    }
+
+                    if ($relation = $this->selectFieldRelation($relationSet)){
+                        //instantiate a new Data model
+                        //note that we may have or need more than one of them open for some type of cross-interaction
+                        $_start = microtime(true);
+                        $r[$field] = new self($this->cnx);
+
+                        $relation_root_table = $this->actualTableName($this->fetchDataGroup($relation['identifier'])->rootDataObject);
+                        $r[$field]->inject($relation_root_table, ['direct_access' => 'allow']);
+
+
+                        //get the data with limited additional information
+
+
+
+
+
+                        // ---------- todo: hack-alert: fix this -------------------
+                        // ---------------------------------------------------------
+                        $subRequest = [
+                            '_mask' => [
+                                'id',
+                                $relation['label'] . ' AS _label',
+                            ]
+                        ];
+                        $id = [];
+                        if (empty($relation['filter'])) {
+                            $relation['filter'] = 'needed';
+                            foreach ($dataset as $data) {
+                                $id[$data[$field]] = true;
                             }
-
-                            //destroy the model
-                            unset($r[$column]);
+                            $subRequest['id'] = '|IN|' . implode('|', array_keys($id));
                         }
+                        $subMeta = ['minimal' => true];
+                        // ---------------------------------------------------------
+                        // ---------------------------------------------------------
+
+
+
+
+                        
+                        if ($result = $r[$field]->request($subRequest, $subMeta)){
+                            $_stop = microtime(true);
+                            $relations[$field] = [
+                                'relation_lookup_took' => round($_stop - $_start, 5),
+                                'query_took' => $result['query_took'],
+                                'total_rows' => $result['total_rows'],
+                                'structure' => $result['structure'],
+                                'dataset' => $result['dataset'],
+                                'query' => $result['query'],
+                                'filter' => $relation['filter'],
+                                'handle' => $relation['handle'] ?? 'default',
+                            ];
+                        }
+
+                        //destroy the model
+                        unset($r[$field]);
                     }
                 }
             }
@@ -973,9 +819,9 @@ class Data extends Model{
                             //2018-07-29 <sfullman@presidio.com> pass this field and overall request; allows for calculated values to be returned
                             $insert[$n] = $action->$method($n, $request);
 
-                        }else if(!empty($default['value'])){
+                        }else if(array_key_exists('value', $default)){
                             //this is a static value, or constant, or may have been set to some value like page_key by the constructor
-                            $insert[$n] = $default['value'];
+                            $insert[$n] = is_null($default['value']) ? null : $default['value'];
                         }else{
                             continue;
                         }
@@ -1222,7 +1068,7 @@ class Data extends Model{
                 'status_message' => 'Please enter a valid table name',
             ];
         } else {
-            $sql = "SELECT * FROM sys_table WHERE table_name = '". addslashes($tableName) . "' AND table_group = '" . addslashes($tableGroup). "'";
+            $sql = "SELECT * FROM sys_data_object WHERE table_name = '". addslashes($tableName) . "'";
             $query = $this->cnx->query($sql);
             $result = $query->getResultArray();
             if (!empty($result[0])) {
@@ -1267,13 +1113,10 @@ class Data extends Model{
         }
         $tableMetaString .= ' COMMENT=\'' . str_replace('\'', '\'\'', $tableComment) . '\'';
 
-        $saas = new \App\Controllers\Modules\SaaS\Data();
-        $tableKey = $saas->generateTableKey();
-        $actualTableName = $saas->actualTableName([
-            'table_group' => $tableGroup ?? 'common',
+        $tableKey = $this->generateTableKey();
+        $actualTableName = $this->actualTableName([
             'table_name' => $tableName,
             'table_key' => $tableKey,
-            'literal' => 0,
         ]);
         $tableNameString = $trial ? $tableName : $actualTableName;
 
@@ -1284,7 +1127,6 @@ class Data extends Model{
 $fieldCreateString
 $indexCreateString
 ) $tableMetaString";
-        $sql = str_replace('CURRENT TIMESTAMP', 'CURRENT_TIMESTAMP', $sql);
 
         if (!$trial) {
             // actually create the table
@@ -1294,15 +1136,17 @@ $indexCreateString
             $initialConfig = str_replace(':"false"', ':false', $initialConfig);
             $initialConfig = str_replace(':"true"', ':true', $initialConfig);
 
-            // enter the table in sys_table
-            $sys_table_insert = "INSERT INTO sys_table SET 
-            table_group = '" . addslashes($tableGroup) . "', 
+            $group_id = $this->fetchOrCreateTableGroup($tableGroup)['id'];
+
+            // enter the table in sys_data_object
+            $sys_data_object_insert = "INSERT INTO sys_data_object SET 
+            group_id = '$group_id', 
             title = '" . addslashes($title) . "',
             description = '" . addslashes($description) . "',
             table_name = '" . addslashes($tableName) . "',
             table_key = '" . addslashes($tableKey) . "',
             initial_config = '" . addslashes($initialConfig) . "'";
-            $this->cnx->query($sys_table_insert);
+            $this->cnx->query($sys_data_object_insert);
 
             $status_message = "CREATE TABLE executed successfully: $tableName";
             $message = []; // todo: develop this
@@ -1329,6 +1173,26 @@ $indexCreateString
          *      6. show any existing table in edit mode in this interface
          *      7. handle MYSQL table length limits
          */
+    }
+
+    /**
+     * This is a very hackable and temporary method
+     * @new
+     * @created 2021-01-09
+     *
+     * @param $nameOrId
+     * @return mixed
+     */
+    public function fetchOrCreateTableGroup($nameOrId) {
+        $query = $this->cnx->query("SELECT * FROM sys_data_object_group WHERE '" . addslashes($nameOrId) . "' IN(id, name)");
+        if (($result = $query->getResultArray()) && !empty($result[0])) {
+            return $result[0];
+        } else {
+            if (!preg_match('/^[0-9]+$/', $nameOrId)) exit('Group name must not be a number');
+            $sql = "INSERT INTO sys_data_object_group SET name = '" . addslashes($nameOrId) . "'";
+            $result = $this->cnx->query($sql);
+            return $result->connID->insert_id;
+        }
     }
 
     /**
@@ -1586,9 +1450,8 @@ $indexCreateString
      * @param $id
      */
     public function assign_key($id) {
-        $saas = new \App\Controllers\Modules\SaaS\Data();
-        $table_key = $saas->generateTableKey();
-        $this->cnx->query("UPDATE sys_table SET table_key = '$table_key' WHERE id = $id AND table_key IS NULL");
+        $table_key = $this->generateTableKey();
+        $this->cnx->query("UPDATE sys_data_object SET table_key = '$table_key' WHERE id = $id AND table_key IS NULL");
     }
 
     public function query_builder($request, $structure, $meta) {
@@ -1613,7 +1476,6 @@ $indexCreateString
          */
         $where = '';
         $token = md5(time().rand());
-        $whole_field = '/^[_a-zA-Z]+[_0-9a-zA-Z]*$/';
         $conjunction = empty($meta['or']) ? 'AND' : 'OR';
 
         //2018-10-27: handle exclusive multiples, e.g. WHERE (Hostname LIKE '%abc%' AND Hostname LIKE '%def%')
@@ -1636,6 +1498,30 @@ $indexCreateString
         }
 
         foreach($structure as $field => $config){
+
+            // handle relationship joins, name the joined field or expression and the needed joined table
+            if (!empty($request['_relations'][$field]) &&
+                $relation = $this->selectFieldRelation($request['_relations'][$field])
+            ) {
+
+                // we assume that the value is expressed in the selected relation
+                $tableAlias = 't' . (count($this->joins) + 1);
+
+                $this->joins[] = [
+                    'alias' => $tableAlias,
+                    'table' => $this->actualTableName($this->fetchDataGroup($relation['identifier'])->rootDataObject),
+                    'on' => [
+                        [
+                            'field' => $field,
+                            'root_alias' => 'r',
+                        ],
+                    ],
+                ];
+                $expressedField = $this->convertStringExpressionToJoinedTable($relation['label'], $tableAlias);
+            } else {
+                $expressedField = !empty($config['alias']) ? $config['expression'] : $field;
+            }
+
             // Note: we can also handle arrays (non-associative)
             if(
                 isset($request[$field]) &&
@@ -1645,115 +1531,120 @@ $indexCreateString
                     (!is_array($request[$field]) && !empty($request[$field]) && !empty(trim($request[$field])))
                 )
             ){
-                $values = is_array($request[$field]) ? $request[$field] : [$request[$field]];
-                $multiple = count($values) > 1;
-
-                $expressedField = !empty($config['alias']) ? $config['expression'] : $field;
-
-                //note only "solid" field values get prepended table_alias
-                $prefix = (!empty($config['table_alias']) && preg_match($whole_field, $expressedField) ? $config['table_alias'].'.' : '');
-
-                if($multiple) $where .= ($where ? ' ' . $conjunction . ' ' : '') . '(';
-
-                $i = 0;
-                foreach($values as $value){
-                    $i++;
-
-                    $value = trim($value);
-
-                    if(substr($value,0,1) === '|'){
-                        $value = substr($value,1);
-                        $value = str_replace('\|', $token, $value);
-                        $value = explode('|', $value);
-                        foreach($value as $n => $v){
-                            $value[$n] = str_replace($token, '|', $v);
-                        }
-                        //format is relationship|value1[|value2|value3 etc..]
-
-                        //simply means we don't search on this
-                        //2018-10-21 <sfullman@presidio.com> I am not sure this is used in the code..
-                        //if(strtolower($value[0] === 'null')) continue;
-
-                        if($multiple){
-                            $conj = in_array($expressedField, $exclusive_multiples) ? 'AND' : 'OR';
-                        }else{
-                            $conj = $conjunction;
-                        }
-                        $where .= ($where && !($multiple && $i === 1) ? ' ' . $conj .' ':'');
-                        $where .= $prefix . $expressedField;
-
-                        if(strtolower($value[0]) === 'between') {
-                            if (strlen(trim($value[1])) && strlen(trim($value[2]))) {
-                                $where .= ' BETWEEN \'' . str_replace("'", '\\\'', $this->prepare_correct_format($config, $value[1])) . '\' AND \'' . str_replace("'", '\\\'', $this->prepare_correct_format($config, $value[2])) . '\'';
-                            } else if (strlen(trim($value[1]))) {
-                                $where .= ' >= \'' . str_replace("'", '\\\'', $this->prepare_correct_format($config, $value[1])) . '\'';
-                            } else if (strlen(trim($value[2]))) {
-                                $where .= ' <= \'' . str_replace("'", '\\\'', $this->prepare_correct_format($config, $value[1])) . '\'';
-                            } else {
-                                //no filter required
-                            }
-                        }else if(strtolower($value[0]) === 'in' || strtolower($value[0]) === 'notin') {
-                            // IN(a, b, ..) or NOT IN(a, b, ..)
-                            $rlx = strtolower($value[0]);
-                            $str = $rlx === 'in' ? ' IN' : ' NOT IN';
-                            $str .= '(';
-                            for ($i = 1; $i < count($value); $i++) {
-                                $val = $value[$i];
-                                if (is_null($val)) {
-                                    $str .= 'NULL, ';
-                                } else {
-                                    $str .= '\'' . str_replace("'", '\\\'', $this->prepare_correct_format($config, $val)) . '\', ';
-                                }
-                            }
-                            $str = rtrim($str, ', ');
-                            $str .= ')';
-                            $where .= $str;
-                        }else if(strtolower($value[0]) === 'is') {
-                            if (is_null($value[1])) {
-                                $where .= ' IS NULL ';
-                            } else {
-                                $where .= ' = ' . '\'' . str_replace("'", '\\\'', $this->prepare_correct_format($config, $value[1])) . '\'';
-                            }
-                        }else if(strtolower($value[0]) === 'null'){
-                            $where .= ' IS NULL';
-                        }else if(strtolower($value[0]) === 'notnull'){
-                            $where .= ' IS NOT NULL';
-                        }else if(strtolower($value[0]) === 'blank'){
-                            //back-enter a left parenthesis
-                            $where = substr($where, 0, strlen($where) - strlen($prefix . $expressedField)) . '(' . $prefix . $expressedField;
-                            $where .= ' IS NULL OR ' . $prefix . $expressedField . ' = \'\')';
-                        }else if(strtolower($value[0]) === 'notblank'){
-                            //back-enter a left parenthesis
-                            $where = substr($where, 0, strlen($where) - strlen($prefix . $expressedField)) . '(' . $prefix . $expressedField;
-                            $where .= ' IS NOT NULL AND ' . $prefix . $expressedField . ' != \'\')';
-                        }else if(in_array(strtolower($value[0]), array_keys($this->comparators))){
-                            $rlx = $this->comparators[strtolower($value[0])];
-                            //remember you can't compare with NULL, gt, lt, etc. don't make any sense so the user will get no results, but we can intervene for not equal - let's change it to IS NOT
-                            if(is_null($value[1]) && $rlx === '!='){
-                                $where .= ' IS NOT NULL';
-                            }else{
-                                $where .= $rlx . '\'' . str_replace("'", '\\\'', $this->prepare_correct_format($config, $value[1])) . '\'';
-                            }
-                        }else{
-                            // no action yet
-                            exit('unrecognized relationship key');
-                        }
-                    }else{
-                        if($multiple){
-                            $conj = in_array($expressedField, $exclusive_multiples) ? 'AND' : 'OR';
-                        }else{
-                            $conj = $conjunction;
-                        }
-                        $where .= ($where && !($multiple && $i === 1)? ' ' . $conj .' ':'');
-                        $where .= $prefix . $expressedField;
-                        $where .= ' LIKE \'%' . str_replace("'", '\\\'', $value) . '%\'';
-                    }
-                }
-                //close parenthesis on field group
-                if($multiple) $where .= ')';
+                // run process below
             }else{
                 continue;
             }
+
+            $values = is_array($request[$field]) ? $request[$field] : [$request[$field]];
+            $multiple = count($values) > 1;
+
+
+            //note only "solid" field values get prepended table_alias
+            $prefix = (
+                !empty($config['table_alias']) && preg_match('/^' . $this->whole_field . '$/', $expressedField) ?
+                    $config['table_alias'].'.' :
+                    ''
+            );
+
+            if($multiple) $where .= ($where ? ' ' . $conjunction . ' ' : '') . '(';
+
+            $i = 0;
+            foreach($values as $value){
+                $i++;
+
+                $value = trim($value);
+
+                if(substr($value,0,1) === '|'){
+                    $value = substr($value,1);
+                    $value = str_replace('\|', $token, $value);
+                    $value = explode('|', $value);
+                    foreach($value as $n => $v){
+                        $value[$n] = str_replace($token, '|', $v);
+                    }
+                    //format is relationship|value1[|value2|value3 etc..]
+
+                    //simply means we don't search on this
+                    //2018-10-21 <sfullman@presidio.com> I am not sure this is used in the code..
+                    //if(strtolower($value[0] === 'null')) continue;
+
+                    if($multiple){
+                        $conj = in_array($expressedField, $exclusive_multiples) ? 'AND' : 'OR';
+                    }else{
+                        $conj = $conjunction;
+                    }
+                    $where .= ($where && !($multiple && $i === 1) ? ' ' . $conj .' ':'');
+                    $where .= $prefix . $expressedField;
+
+                    if(strtolower($value[0]) === 'between') {
+                        if (strlen(trim($value[1])) && strlen(trim($value[2]))) {
+                            $where .= ' BETWEEN \'' . str_replace("'", '\\\'', $this->prepare_correct_format($config, $value[1])) . '\' AND \'' . str_replace("'", '\\\'', $this->prepare_correct_format($config, $value[2])) . '\'';
+                        } else if (strlen(trim($value[1]))) {
+                            $where .= ' >= \'' . str_replace("'", '\\\'', $this->prepare_correct_format($config, $value[1])) . '\'';
+                        } else if (strlen(trim($value[2]))) {
+                            $where .= ' <= \'' . str_replace("'", '\\\'', $this->prepare_correct_format($config, $value[1])) . '\'';
+                        } else {
+                            //no filter required
+                        }
+                    }else if(strtolower($value[0]) === 'in' || strtolower($value[0]) === 'notin') {
+                        // IN(a, b, ..) or NOT IN(a, b, ..)
+                        $rlx = strtolower($value[0]);
+                        $str = $rlx === 'in' ? ' IN' : ' NOT IN';
+                        $str .= '(';
+                        for ($i = 1; $i < count($value); $i++) {
+                            $val = $value[$i];
+                            if (is_null($val)) {
+                                $str .= 'NULL, ';
+                            } else {
+                                $str .= '\'' . str_replace("'", '\\\'', $this->prepare_correct_format($config, $val)) . '\', ';
+                            }
+                        }
+                        $str = rtrim($str, ', ');
+                        $str .= ')';
+                        $where .= $str;
+                    }else if(strtolower($value[0]) === 'is') {
+                        if (is_null($value[1])) {
+                            $where .= ' IS NULL ';
+                        } else {
+                            $where .= ' = ' . '\'' . str_replace("'", '\\\'', $this->prepare_correct_format($config, $value[1])) . '\'';
+                        }
+                    }else if(strtolower($value[0]) === 'null'){
+                        $where .= ' IS NULL';
+                    }else if(strtolower($value[0]) === 'notnull'){
+                        $where .= ' IS NOT NULL';
+                    }else if(strtolower($value[0]) === 'blank'){
+                        //back-enter a left parenthesis
+                        $where = substr($where, 0, strlen($where) - strlen($prefix . $expressedField)) . '(' . $prefix . $expressedField;
+                        $where .= ' IS NULL OR ' . $prefix . $expressedField . ' = \'\')';
+                    }else if(strtolower($value[0]) === 'notblank'){
+                        //back-enter a left parenthesis
+                        $where = substr($where, 0, strlen($where) - strlen($prefix . $expressedField)) . '(' . $prefix . $expressedField;
+                        $where .= ' IS NOT NULL AND ' . $prefix . $expressedField . ' != \'\')';
+                    }else if(in_array(strtolower($value[0]), array_keys($this->comparators))){
+                        $rlx = $this->comparators[strtolower($value[0])];
+                        //remember you can't compare with NULL, gt, lt, etc. don't make any sense so the user will get no results, but we can intervene for not equal - let's change it to IS NOT
+                        if(is_null($value[1]) && $rlx === '!='){
+                            $where .= ' IS NOT NULL';
+                        }else{
+                            $where .= $rlx . '\'' . str_replace("'", '\\\'', $this->prepare_correct_format($config, $value[1])) . '\'';
+                        }
+                    }else{
+                        // no action yet
+                        exit('unrecognized relationship key');
+                    }
+                }else{
+                    if($multiple){
+                        $conj = in_array($expressedField, $exclusive_multiples) ? 'AND' : 'OR';
+                    }else{
+                        $conj = $conjunction;
+                    }
+                    $where .= ($where && !($multiple && $i === 1)? ' ' . $conj .' ':'');
+                    $where .= $prefix . $expressedField;
+                    $where .= ' LIKE \'%' . str_replace("'", '\\\'', $value) . '%\'';
+                }
+            }
+            //close parenthesis on field group
+            if($multiple) $where .= ')';
         }
         return $where;
     }
@@ -1769,6 +1660,7 @@ $indexCreateString
         if(empty($orderBy)) return '';
 
         if(!is_array($orderBy)){
+            // Here we have a |field|ASC|field2|DESC format.  Fields will be checked against $structure below
             if(substr($orderBy,0,1) === '|'){
                 $token = md5(time().rand());
                 $order = 'ASC';
@@ -1818,13 +1710,16 @@ $indexCreateString
                     return $orderBy;
                 }else{
                     //log "unparsable ORDER BY statement assumed good"
-                    log_message('info', 'unparsable ORDER BY statement "' . $orderBy . '" assumed good');
+                    log_message('info', 'unparsable ORDER BY statement assumed good: "' . $orderBy . '"');
                 }
                 return $orderBy;
             }
         }
         $str = '';
         $fieldMap = [];
+        $defaultPath = [new IntKey, 'handle'];
+        $joins = $this->sArray($this->joins);
+        $joinFieldPath = [new IntKey, 'on', new IntKey, 'field'];
         foreach($structure as $field => $config){
             $fieldMap[strtolower($field)] = $config;
         }
@@ -1840,7 +1735,22 @@ $indexCreateString
                 continue;
             }
 
-            $str .= ($str ? ', ' : '') . (is_numeric($n) ? $v : (stristr($v, 'BIN') ? 'BINARY ' : '') . $n . ' ' . str_replace('BIN', '', $v));
+            // If relations are present for this field, replace with the requested label
+            // Admittedly this is a crazy set of commands but if it never fails regardless of user input, that is a plus
+            if (
+                ($label = $this->sVal(
+                    $this->request->_relations->{$n}->fetchSection($defaultPath, 'default', 2, SaasArray::RELATIONSHIP_VALUE)->label)
+                ) &&
+                ($alias = $this->sVal(
+                    $joins->fetchSection($joinFieldPath, $n, 2, SaasArray::RELATIONSHIP_VALUE)->alias)
+                )
+            ) {
+                // hack-alert: fix this
+                $label = preg_replace('/\br\./', $alias . '.', $label);
+                $str .= ($str ? ', ' : '') . (is_numeric($n) ? $v : (stristr($v, 'BIN') ? 'BINARY ' : '') . $label . ' ' . str_replace('BIN', '', $v));
+            } else {
+                $str .= ($str ? ', ' : '') . (is_numeric($n) ? $v : (stristr($v, 'BIN') ? 'BINARY ' : '') . $n . ' ' . str_replace('BIN', '', $v));
+            }
         }
         return $str;
     }
@@ -2120,5 +2030,484 @@ $indexCreateString
         }
         fclose($fp);
         return ['structure' => $structure, 'elapsed' => round(microtime(true) - $start, 5)];
+    }
+
+    /**
+     * @param null $tableOrKey
+     * @param bool $override
+     * @return mixed|null
+     */
+    public function loadAccountTables($tableOrKey = null, $override = false) {
+        if (!$this->dataObjects || $override) {
+            $this->dataObjectKeys = [];
+            $this->dataObjects = [];
+            $result = $this->cnx->query("SELECT * FROM sys_data_object");
+            if ($a = $result->getResultArray()) {
+                foreach ($a as $v) {
+                    $this->dataObjects[strtolower($v['table_name'])] = $v;
+                    $this->dataObjectKeys[strtolower($v['table_key'])] = $v['table_name'];
+                    $this->dataObjectIds[$v['id']] = strtolower($v['table_name']);
+                }
+            }
+        }
+
+        if (is_int($tableOrKey)) {
+            return $this->dataObjects[$this->dataObjectIds[$tableOrKey]];
+        }
+        if ($tableOrKey) {
+            $tableOrKey = strtolower($tableOrKey);
+            return $this->dataObjects[$tableOrKey] ?? (!empty($this->dataObjectKeys[$tableOrKey]) ? $this->dataObjects[$this->dataObjectKeys[$tableOrKey]] : null);
+        }
+        return $this->dataObjects;
+    }
+
+    /**
+     * See SaaSController::validateUserAccessToSubdomain - this is the same concept
+     * @param $table
+     * @param $subdomain
+     * @return bool
+     */
+    public function validateUserAccessToTable($table, $subdomain) {
+        // ------- redundant for here but we do it anyway -------
+        if (empty($_SESSION['login'])) return false;
+
+        $login = $_SESSION['login'];
+        if (empty($login['active'])) return false;
+        if (empty($login['accounts'][$subdomain])) return false;
+        // ------------------------------------------------------
+
+        if (!$table) {
+            return false;
+        }
+
+        /* todo: we should also check the user role LIVE for each API action; for now just check user session role */
+        $rank = max(array_keys($login['accounts'][$subdomain]['roles']));
+
+        $record = $this->loadAccountTables(str_replace('-', '_', $table));
+
+        if (! $record) {
+            return false;
+        }
+
+        if ($record['table_access'] > $rank) {
+            return false;
+        }
+
+        /* todo: note that System User and Admin would also have access; this shouldn't happen but it won't if we
+         * don't put those perms in here, so document this in the Auth/Login class and make sure it's unit tested */
+        if ($rank < Auth::MIN_SAAS_ACCESS_LEVEL) return false;
+
+        return true;
+    }
+
+    /**
+     * Convention for naming user tables
+     *
+     * @param $tableRow
+     * @return string
+     */
+    public function actualTableName($tableRow) {
+        return $tableRow['table_name'];
+    }
+
+    /**
+     * @return string
+     */
+    protected function generateTableKey() {
+        $str = strtolower(chr( 64 + rand(1, 26)));
+        $str .= strtolower(chr( 64 + rand(1, 26)));
+        $str .= rand(1234, 9999);
+        $str .= strtolower(chr( 64 + rand(1, 26)));
+        $str .= strtolower(chr( 64 + rand(1, 26)));
+        return $str;
+    }
+
+    /**
+     * Give a setting of multiple possible relation arrays for a given column select the best one based on user preferences
+     * and locale preferences.  Allows for the best dataset of id, label and other meta information for the FE to present
+     * in replacement for the foreign key field.
+     *
+     * This is checked thoroughly as it's user-creatable
+     *
+     * @param $relations
+     * @param array $config
+     * @return array|bool
+     */
+    public function selectFieldRelation($relations, $config = []){
+
+        // This is intended so that for example an admin can configure multiple data relations for a field and
+        // a non-admin can simply select a handle for best fit.
+        $handle = 'default';
+
+        if (!is_array($relations)) {
+            return false;
+        }
+        $selectees = [];
+
+        // Select which relation is best for mapping data to field
+        foreach ($relations as $relation) {
+            if (count($relations) === 1) {
+                // selected by default
+                break;
+            }
+            if (!empty($relations['handle']) && strtolower($relations['handle']) === strtolower($handle)) {
+                // selected by declaring handle = default
+                break;
+            }
+            $selectees[] = $relation;
+        }
+
+        if (!empty($selectees)) {
+            $relation = $selectees[0];
+        }
+
+        // Validate selectee - identifier and label are required
+        // todo: replace !is_string() with an actual parser of what the user could send
+            // sys:sys_data_object          table group and table name
+            // ec1234ab                     table key
+            // financial_client             literal table name when keyed as such
+
+        if (empty($relation['identifier']) || !is_string($relation['identifier'])) {
+            // the identifier doesn't map to an actual data object
+            return false;
+        }
+        if (empty($relation['label']) || !is_string($relation['label'])) {
+            return false;
+        }
+        return $relation;
+    }
+
+    /**
+     * Security feature, uses alias and not table
+     *
+     * @param $joins
+     * @param array $config
+     * @return string
+     */
+    protected function joinsToSQLString($joins, $config = []) {
+        /*
+         * Example of format:
+        $joins = [
+            [
+                'type' => 'LEFT',                   // default if not specified
+                'table' => 'actual_table_name',
+                'alias' => 't2',
+                'on' => [
+                    [
+                        'root_alias' => 'r',
+                        'field' => 'table_id',
+                        'rlx' => '=',               // default if not specified
+                        'key' => 'id'
+                    ]
+                ],
+            ]
+        ];
+
+        */
+        if (empty($joins)) return '';
+
+        $string = PHP_EOL;
+        foreach ($joins as $join) {
+
+            $string .= ($join['type'] ?? 'LEFT') . ' JOIN ' . $join['table'] . ' ' . $join['alias'] . ' ON ';
+            $ons = [];
+            foreach ($join['on'] as $on) {
+                $ons[] = $on['root_alias'] . '.' . $on['field'] . ' ' .($on['rlx'] ?? '=') . ' ' . $join['alias'] . '.' . ($on['key'] ?? 'id');
+            }
+            $string .= implode(' AND ', $ons) . PHP_EOL;
+        }
+
+        return $string;
+    }
+
+    /**
+     * Converts a string e.g. CONCAT(r.firstName, ' ', r.lastName) to CONCAT(t2.firstName, ' ', t2.lastName)
+     *
+     * @param $expression
+     * @param $tableAlias
+     * @return mixed
+     */
+    protected function convertStringExpressionToJoinedTable($expression, $tableAlias) {
+        // todo: this needs to be configurable
+        $rootTableAlias = 'r';
+        $expression = preg_replace('/\b' . $rootTableAlias . '\.(' . $this->whole_field . ')/', $tableAlias . '.$1', $expression);
+        return $expression;
+    }
+
+    protected $joins = [];
+
+    public $whole_field = '[_a-zA-Z]+[_0-9a-zA-Z]*';
+
+    /**
+     * @param $request
+     * @return mixed
+     */
+    public function export($request) {
+        //parse front-end JavaScript settings
+        $request['orderBy'] = empty($request['orderBy']) ? '' : json_decode($request['orderBy'], true);
+        $columnsToShow = !empty($request['columnsToShow']) ? json_decode($request['columnsToShow'], true) : [];
+        $share = !empty($request['share']) ? json_decode($request['share'], true) : [];
+
+        $exportAs = !empty($share['exportAs']) ? $share['exportAs'] : '';
+
+        if($exportAs !== 'link') $results = $this->request($request, ['limitOverride' => true]);
+
+        $key = substr(md5(rand() . time()), 0, 8);
+
+        if($exportAs === 'xlsx' || $exportAs === 'csv') {
+
+            $file = $this->filePath . $exportAs . '-' . $key . '.' . $exportAs;
+
+            $headings = [];
+            foreach ($results['structure'] as $col => $null) {
+                if (!empty($share['exportOnlyColumnsShown']) && !empty($columnsToShow) && !in_array($col, $columnsToShow)) continue;
+                $headings[] = camelCase(snakeCase($col));
+            }
+
+            if($exportAs === 'xlsx'){
+                if (!class_exists('ZipArchive')) {
+                    // Error T13
+                    throw new \App\Exceptions\GeneralFault(13);
+                }
+
+                if (!class_exists('Box\Spout\Writer\XLSX\Writer')) {
+                    // Error T14
+                    throw new \App\Exceptions\GeneralFault(14);
+                }
+                $writer = WriterFactory::create(Type::XLSX);
+                $writer->openToFile($file); // write data to a file or to a PHP stream
+                //$writer->openToBrowser($fileName); // stream data directly to the browser
+                $writer->addRow($headings);
+            } else {
+                $output = [$headings];
+                $fp = fopen($file, 'w');
+            }
+
+            if (!empty($results['dataset'])) {
+                foreach ($results['dataset'] as $row) {
+                    if (!empty($share['exportOnlyColumnsShown']) && !empty($columnsToShow)) {
+                        foreach ($row as $col => $val) {
+                            if (!in_array($col, $columnsToShow)) {
+                                unset($row[$col]);
+                                continue;
+                            }
+                            if (!empty($results['structure'][$col]['intent'])) {
+                                if ($results['structure'][$col]['intent'] === 'datetime') {
+                                    $row[$col] = createDate($val, $this->defaultDateFormatHuman);
+                                }
+                            }
+                        }
+                    }
+                    if ($exportAs === 'xlsx') {
+                        $writer->addRow($row);
+                    } else {
+                        $output[] = $row;
+                    }
+                }
+            } else {
+                $noRecordsRow = ['No records were found based on your criteria'];
+                if($exportAs === 'xlsx') {
+                    //write not-available row
+                    $writer->addRow($noRecordsRow);
+                } else {
+                    $output[] = $noRecordsRow;
+                }
+            }
+
+            if($exportAs === 'xlsx') {
+                $writer->close();
+            } else {
+                fwrite($fp, array_to_csv($output));
+                fclose($fp);
+            }
+
+        } else if($exportAs === 'link'){
+            if (true) {
+                exit('link not developed; it will be developed as part of a url shortening service in SAAS');
+                $request['request'] = end($original);
+                $request = json_encode($request);
+                $settings = str_replace("'", "\\'", $request);
+                $settings = str_replace("\\\"", "\\\\\"", $settings);
+                $sql = "INSERT INTO master.share_links SET
+            username = '". $_SESSION['UserName'] . "',
+            public = ".(!empty($share['report']) && isset($share['public']) ? "'" . $share['public'] . "'" : 'NULL').",
+            name = " . (!empty($share['report']) && !empty($share['reportName']) ? "'" . str_replace("'", "\\'", $share['reportName']) . "'" : 'NULL') . ",
+            description = " . (!empty($share['report']) && !empty($share['reportDescription']) ? "'" . str_replace("'", "\\'", $share['reportDescription']) . "'" : 'NULL') . ",
+            token = '$key',
+            settings = '$settings'";
+                $data->cnx->query($sql);
+
+
+                return $this->output
+                    ->set_content_type('application/json')
+                    ->set_status_header(200)
+                    ->set_output(json_encode(
+                        [
+                            'key' => $key,
+                            'exportAs' => $exportAs,
+                            'link' => get_client_url(['suppressPort' => true]) . '/api/share/link?' . $key,
+                        ]
+                    ));
+            }
+        }
+        // todo: this could be either a table label or table key - standardize to the table_key value
+        // todo: handle garbage collection
+        $filename = 'Export_' . $request['request'] . '-' . date('Y-m-d@H-i-s') . '[' . count($results['dataset']) . '-records].' . $exportAs;
+        return [
+            'key' => $key,
+            'exportAs' => $exportAs,
+            'filename' => $filename,
+        ];
+    }
+
+    /**
+     * Return a data group definition by a unique string such as my-application, identifier such as ec1298gz, or id such as 7985
+     * The latter id method is discouraged.  If an int id is passed, it MUST be the id in sys_data_group, not sys_data_object
+     *
+     * @param string $dataGroup
+     * @param string $disposition
+     * @param DataGroupDefinition|NULL $dataGroupDefinition
+     * @return DataGroupDefinition
+     */
+    public function fetchDataGroup(string $dataGroup, $disposition = '', DataGroupDefinition $dataGroupDef = null, $skipInheritance = false) {
+        /**
+         * todo:
+         *      do we set this in this class' state or not.
+         * We can allow table_id to be present, or the table_id of the latest ancestor, OR the root table in any of that inheritance path
+         */
+        $key = $dataGroup;
+
+        // Create an initial instance of the Definition
+        $new = false;
+        if ($dataGroupDef === null) {
+            $new = true;
+            $dataGroupDef = new DataGroupDefinition();
+        }
+
+        if ($disposition === 'table') {
+            if ($dataGroupDef->rootDataObject) {
+                // root data object (i.e. table) has been defined, take no action
+                return $dataGroupDef;
+            }
+
+            if ($rootDataObject = $this->fetchDataObject($dataGroup)) {
+                $dataGroupDef->rootDataObject = $rootDataObject;
+            }
+
+            // table fetch portion is now complete
+            return $dataGroupDef;
+        }
+
+
+        $sql = "SELECT g.*, xref.child_object_type, xref.child_object_id
+        FROM sys_data_group g 
+        LEFT JOIN sys_data_group_xref xref ON g.id = xref.data_group_id AND xref.child_object_relationship = 'root table'
+        WHERE '$key' IN (g.id, g.group_key, g.group_label)
+        ";
+        $query = $this->cnx->query($sql);
+        if ($record = $query->getResultArray()) {
+            if (count($record) > 1) {
+                throw new GeneralFault(12, $dataGroup);
+            }
+            $record = $record[0];
+            /*
+             * we will have the following:
+             * if table_id and a joined record we log an alert to what appears to be a misconfiguration
+             * if joined record we either take it if a dataObject, or query again if a dataGroup
+             *
+             */
+
+            if ($disposition === 'inheritance') {
+                if (!$skipInheritance) {
+                    $dataGroupDef->pushToInheritance($record);
+                }
+            } else {
+                $dataGroupDef->setDataGroup($record);
+            }
+
+            // ------- value of bool processJoinedRootTableFirst determines which of these two run first ---------
+            if (!$dataGroupDef->rootDataObject) {
+                if (!$this->processJoinedRootTableFirst) goto processTableIdFirst;
+
+                processTableIdFirstAlternate:
+                if ($record['child_object_id']) {
+                    if ($record['table_id']) {
+                        // this appears to be a misconfiguration
+                        // todo: log message
+                    }
+
+                    if ($record['child_object_type'] === 'sys_data_object') {
+                        $dataGroupDef->rootDataObject = $dataGroupDef->rootDataObject ?? $this->loadAccountTables((int)$record['child_object_id']);
+                    } else if ($record['child_object_type'] === 'sys_data_group') {
+                        $dataGroupDef->rootDataObject =
+                            $dataGroupDef->rootDataObject ?? $this->fetchDataGroup(
+                            // we are going to pass as if this is a root request; the presence of the dataGroup and lack of `inheritance` will be enough cue.
+                                $record['child_object_id'], null, $dataGroupDef, true
+                            )->rootDataObject;
+                    }
+                }
+                if (!$this->processJoinedRootTableFirst) goto afterProcess;
+
+                processTableIdFirst:
+                if ($record['table_id']) {
+                    $dataGroupDef->rootDataObject =
+                        $dataGroupDef->rootDataObject ?? $this->fetchDataGroup(
+                            $record['table_id'], 'table', $dataGroupDef
+                        )->rootDataObject;
+                }
+                if (!$this->processJoinedRootTableFirst) goto processTableIdFirstAlternate;
+
+                afterProcess:
+            }
+            // ---------------------------------------------------------------------------------------------------
+            if ($record['data_group_id']) {
+                // We are checking for inheritance but skip it if we're ascending up a table_group branch for a joined root table data_group
+                $dataGroupDef = $this->fetchDataGroup($record['data_group_id'], 'inheritance', $dataGroupDef, $skipInheritance);
+            }
+        }
+
+        /**
+         * todo:
+         *  DONE    0. test with loadAccountTables
+         *  DONE    00. turn DGD into a __call getter and setter based on type - do something cool, and this becomes the progenitor of my tooling class
+         *  DONE    1. have non inheritance classes omitted
+         *  DONE    2. experiment with the table value being in different places
+         *  DONE    3. if I can't find anything in dataGroup and this is initial, see if I can find anything in sys_data_object
+         *  4. finalize the rules for objects and lose the whole group concept for tables but keep it in terms of user-friendly organization
+         *  5. finish all the way to the initial view() load and the api/data/select load and etc.
+         *  6. is actualTableName affected?
+         */
+
+        if ($new && empty($dataGroupDef->rootDataObject)) {
+            // one last try
+            $dataGroupDef = $this->fetchDataGroup($dataGroup, 'table', $dataGroupDef);
+        }
+        return $dataGroupDef;
+    }
+
+    /**
+     * Very important method, contains the logic for how a URI string can fetch a rootDataObject record
+     * @param string $key
+     * @return bool
+     */
+    public function fetchDataObject(string $key) {
+        $sql = "SELECT t.* FROM sys_data_object t WHERE '$key' IN(t.id, t.table_name, t.table_key, t.table_label)";
+        $query = $this->cnx->query($sql);
+        if ($record = $query->getResultArray()) {
+            return $record[0];
+        }
+        return false;
+    }
+
+    /**
+     * @param $subject
+     * @return SaasArray
+     */
+    public function sArray($subject, $config = []) {
+        return new SaasArray($subject, $config);
+    }
+
+    public function sVal($value) {
+        return SaasArray::value($value);
     }
 }

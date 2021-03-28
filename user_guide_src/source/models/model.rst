@@ -59,17 +59,41 @@ Creating Your Model
 To take advantage of CodeIgniter's model, you would simply create a new model class
 that extends ``CodeIgniter\Model``::
 
-    <?php namespace App\Models;
+    <?php
+
+    namespace App\Models;
 
     use CodeIgniter\Model;
 
     class UserModel extends Model
     {
-
+        // ...
     }
 
 This empty class provides convenient access to the database connection, the Query Builder,
 and a number of additional convenience methods.
+
+Should you need additional setup in your model you may extend the ``initialize()`` function
+which will be run immediately after the Model's constructor. This allows you to perform
+extra steps without repeating the constructor parameters, for example extending other models::
+
+    <?php
+
+    namespace App\Models;
+
+    use Modules\Authentication\Models\UserAuthModel;
+
+    class UserModel extends UserAuthModel
+    {
+    	/**
+    	 * Called during initialization. Appends
+    	 * our custom field to the module's model.
+    	 */
+        protected function initialize()
+        {
+        	$this->allowedFields[] = 'middlename';
+        }
+    }
 
 Connecting to the Database
 --------------------------
@@ -81,7 +105,9 @@ This ensures that within the model any references to ``$this->db`` are made thro
 connection.
 ::
 
-    <?php namespace App\Models;
+    <?php
+
+    namespace App\Models;
 
     use CodeIgniter\Model;
 
@@ -100,7 +126,9 @@ The model class has a few configuration options that can be set to allow the cla
 to work seamlessly for you. The first two are used by all of the CRUD methods to determine
 what table to use and how we can find the required records::
 
-    <?php namespace App\Models;
+    <?php
+
+    namespace App\Models;
 
     use CodeIgniter\Model;
 
@@ -668,12 +696,12 @@ Working With Query Builder
 You can get access to a shared instance of the Query Builder for that model's database connection any time you
 need it::
 
-	$builder = $userModel->builder();
+    $builder = $userModel->builder();
 
 This builder is already set up with the model's $table. If you need access to another table
 you can pass it in as a parameter, but be aware that this will not return a shared instance::
 
-	$groupBuilder = $userModel->builder('groups');
+    $groupBuilder = $userModel->builder('groups');
 
 You can also use Query Builder methods and the Model's CRUD methods in the same chained call, allowing for
 very elegant use::
@@ -751,10 +779,10 @@ must return the original $data array so other callbacks have the full informatio
 
     protected function hashPassword(array $data)
     {
-        if (! isset($data['data']['password']) return $data;
+        if (! isset($data['data']['password'])) return $data;
 
         $data['data']['password_hash'] = password_hash($data['data']['password'], PASSWORD_DEFAULT);
-        unset($data['data']['password'];
+        unset($data['data']['password']);
 
         return $data;
     }
@@ -771,12 +799,12 @@ use the same callback in multiple events::
 
 Additionally, each model may allow (default) or deny callbacks class-wide by setting its $allowCallbacks property::
 
-	protected $allowCallbacks = false;
+    protected $allowCallbacks = false;
 
 You may also change this setting temporarily for a single model call sing the ``allowCallbacks()`` method::
 
-	$model->allowCallbacks(false)->find(1); // No callbacks triggered
-	$model->find(1);                        // Callbacks subject to original property value
+    $model->allowCallbacks(false)->find(1); // No callbacks triggered
+    $model->find(1);                        // Callbacks subject to original property value
 
 Event Parameters
 ----------------
@@ -822,17 +850,17 @@ to the calling context. In order for ``beforeFind`` to intercept the find workfl
 boolean, ``returnData``::
 
     protected $beforeFind = ['checkCache'];
-    ...
-	protected function checkCache(array $data)
-	{
-		// Check if the requested item is already in our cache
-		if (isset($data['id']) && $item = $this->getCachedItem($data['id']]))
-		{
-			$data['data']       = $item;
-			$data['returnData'] = true;
+    // ...
+    protected function checkCache(array $data)
+    {
+        // Check if the requested item is already in our cache
+        if (isset($data['id']) && $item = $this->getCachedItem($data['id']]))
+        {
+            $data['data']       = $item;
+            $data['returnData'] = true;
 
-			return $data;
-	...
+            return $data;
+    // ...
 
 Manual Model Creation
 =====================
@@ -843,7 +871,9 @@ Model gives you out of the box, and create a fully custom experience.
 
 ::
 
-    <?php namespace App\Models;
+    <?php
+
+    namespace App\Models;
 
     use CodeIgniter\Database\ConnectionInterface;
 
@@ -853,6 +883,6 @@ Model gives you out of the box, and create a fully custom experience.
 
         public function __construct(ConnectionInterface &$db)
         {
-            $this->db =& $db;
+            $this->db = &$db;
         }
     }

@@ -66,7 +66,9 @@ are expected to be located in the **tests/app** directory by default.
 
 To test a new library, **Foo**, you would create a new file at **tests/app/Libraries/FooTest.php**::
 
-    <?php namespace App\Libraries;
+    <?php
+
+    namespace App\Libraries;
 
     use CodeIgniter\Test\CIUnitTestCase;
 
@@ -74,13 +76,15 @@ To test a new library, **Foo**, you would create a new file at **tests/app/Libra
     {
         public function testFooNotBar()
         {
-            . . .
+            // ...
         }
     }
 
 To test one of your models, you might end up with something like this in ``tests/app/Models/OneOfMyModelsTest.php``::
 
-    <?php namespace App\Models;
+    <?php
+
+    namespace App\Models;
 
     use CodeIgniter\Test\CIUnitTestCase;
 
@@ -88,7 +92,7 @@ To test one of your models, you might end up with something like this in ``tests
     {
         public function testFooNotBar()
         {
-            . . .
+            // ...
         }
     }
 
@@ -99,7 +103,7 @@ have the correct namespace relative to ``App``.
 
 .. note:: Namespaces are not strictly required for test classes, but they are helpful to ensure no class names collide.
 
-When testing database results, you must use the `CIDatabaseTestClass <database.html>`_ class.
+When testing database results, you must use the `DatabaseTestTrait <database.html>`_ in your class.
 
 Staging
 -------
@@ -145,6 +149,30 @@ that or provide their own::
         {
             $this->model->purgeDeleted()
         }
+
+Traits
+------
+
+A common way to enhance your tests is by using traits to consolidate staging across different
+test cases. ``CIUnitTestCase`` will detect any class traits and look for staging methods
+to run named for the trait itself. For example, if you needed to add authentication to some
+of your test cases you could create an authentication trait with a set up method to fake a
+logged in user::
+
+	trait AuthTrait
+	{
+		protected setUpAuthTrait()
+		{
+			$user = $this->createFakeUser();
+			$this->logInUser($user);
+		}
+	...
+
+	class AuthenticationFeatureTest
+	{
+		use AuthTrait;
+	...
+
 
 Additional Assertions
 ---------------------

@@ -134,7 +134,7 @@ class RouteCollection implements RouteCollectionInterface
      *
      * @var string
      */
-    protected $HTTPVerb;
+    protected $HTTPVerb = '*';
 
     /**
      * The default list of HTTP methods (and CLI for command line usage)
@@ -196,6 +196,20 @@ class RouteCollection implements RouteCollectionInterface
      * @var Modules
      */
     protected $moduleConfig;
+
+    /**
+     * Flag for sorting routes by priority.
+     *
+     * @var boolean
+     */
+    protected $prioritize = false;
+
+    /**
+     * Route priority detection flag.
+     *
+     * @var boolean
+     */
+    protected $prioritizeDetected = false;
 
     //--------------------------------------------------------------------
 
@@ -531,6 +545,22 @@ class RouteCollection implements RouteCollectionInterface
             }
         }
 
+        // sorting routes by priority
+        if ($this->prioritizeDetected && $this->prioritize && $routes !== [])
+        {
+            $order = [];
+
+            foreach ($routes as $key => $value)
+            {
+                $key                    = $key === '/' ? $key : ltrim($key, '/ ');
+                $priority               = $this->getRoutesOptions($key, $verb)['priority'] ?? 0;
+                $order[$priority][$key] = $value;
+            }
+
+            ksort($order);
+            $routes = array_merge(...$order);
+        }
+
         return $routes;
     }
 
@@ -601,7 +631,6 @@ class RouteCollection implements RouteCollectionInterface
     }
 
     //--------------------------------------------------------------------
-
     /**
      * Adds a single route to the collection.
      *
@@ -1378,6 +1407,17 @@ class RouteCollection implements RouteCollectionInterface
 
         $options = array_merge($this->currentOptions ?? [], $options ?? []);
 
+        // Route priority detect
+        if (isset($options['priority']))
+        {
+            $options['priority'] = abs((int) $options['priority']);
+
+            if ($options['priority'] > 0)
+            {
+                $this->prioritizeDetected = true;
+            }
+        }
+
         // Hostname limiting?
         if (! empty($options['hostname']))
         {
@@ -1429,21 +1469,17 @@ class RouteCollection implements RouteCollectionInterface
         }
 
         //If is redirect, No processing
-        if (! isset($options['redirect']))
+        if (! isset($options['redirect']) && is_string($to))
         {
-            if (is_string($to))
+            // If no namespace found, add the default namespace
+            if (strpos($to, '\\') === false || strpos($to, '\\') > 0)
             {
-                // If no namespace found, add the default namespace
-                if (strpos($to, '\\') === false || strpos($to, '\\') > 0)
-                {
-                    $namespace = $options['namespace'] ?? $this->defaultNamespace;
-                    $to        = trim($namespace, '\\') . '\\' . $to;
-                }
-
-                // Always ensure that we escape our namespace so we're not pointing to
-                // \CodeIgniter\Routes\Controller::method.
-                $to = '\\' . ltrim($to, '\\');
+                $namespace = $options['namespace'] ?? $this->defaultNamespace;
+                $to        = trim($namespace, '\\') . '\\' . $to;
             }
+            // Always ensure that we escape our namespace so we're not pointing to
+            // \CodeIgniter\Routes\Controller::method.
+            $to = '\\' . ltrim($to, '\\');
         }
 
         $name = $options['as'] ?? $from;
@@ -1572,6 +1608,8 @@ class RouteCollection implements RouteCollectionInterface
         {
             $this->routes[$verb] = [];
         }
+
+        $this->prioritizeDetected = false;
     }
 
     //--------------------------------------------------------------------
@@ -1606,5 +1644,19 @@ class RouteCollection implements RouteCollectionInterface
         }
 
         return $options;
+    }
+
+    /**
+     * Enable or Disable sorting routes by priority
+     *
+     * @param boolean $enabled The value status
+     *
+     * @return $this
+     */
+    public function setPrioritize(bool $enabled = true)
+    {
+        $this->prioritize = $enabled;
+
+        return $this;
     }
 }

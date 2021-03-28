@@ -18,16 +18,23 @@ class DataApi extends \App\Controllers\Modules\Saas\Data
 
         $data = new \App\Models\Data($this->dbAccounts[$this->subdomain]);
 
-        $tableRecord = $this->loadAccountTables(str_replace('-', '_', $dataGroup));
+        $tableRecord = $this->data->loadAccountTables(str_replace('-', '_', $dataGroup));
 
-        if (! $this->validateUserAccessToTable($dataGroup)) {
+        if (! $this->data->validateUserAccessToTable($dataGroup, $this->subdomain)) {
             // Error T09
             throw new \App\Exceptions\GeneralFault(9);
         }
-
-        $data->inject($this->actualTableName($tableRecord), ['direct_access' => 'allow']);
-
+        
         $request = $this->request->getPost();
+
+        // Prepare special request items
+        $injectConfig = ['direct_access' => 'allow'];
+        if (!empty($request['_relations'])) {
+            $injectConfig['relations'] = $request['_relations'];
+        }
+
+        $data->inject($this->data->actualTableName($tableRecord), $injectConfig);
+
 
         $results = $data->request($request);
 
@@ -57,14 +64,14 @@ class DataApi extends \App\Controllers\Modules\Saas\Data
 
         $update = new \App\Models\Data($this->dbAccounts[$this->subdomain]);
 
-        $tableRecord = $this->loadAccountTables($dataGroup);
+        $tableRecord = $this->data->loadAccountTables($dataGroup);
 
-        if (! $this->validateUserAccessToTable($dataGroup)) {
+        if (! $this->data->validateUserAccessToTable($dataGroup, $this->subdomain)) {
             // Error T09
             throw new \App\Exceptions\GeneralFault(9);
         }
 
-        $update->inject($this->actualTableName($tableRecord), ['direct_access' => 'allow']);
+        $update->inject($this->data->actualTableName($tableRecord), ['direct_access' => 'allow']);
 
         $request = $this->request->getPost();
 
@@ -87,14 +94,14 @@ class DataApi extends \App\Controllers\Modules\Saas\Data
 
         $insert = new \App\Models\Data($this->dbAccounts[$this->subdomain]);
 
-        $tableRecord = $this->loadAccountTables($dataGroup);
+        $tableRecord = $this->data->loadAccountTables($dataGroup);
 
-        if (! $this->validateUserAccessToTable($dataGroup)) {
+        if (! $this->data->validateUserAccessToTable($dataGroup, $this->subdomain)) {
             // Error T09
             throw new \App\Exceptions\GeneralFault(9);
         }
 
-        $insert->inject($this->actualTableName($tableRecord), ['direct_access' => 'allow']);
+        $insert->inject($this->data->actualTableName($tableRecord), ['direct_access' => 'allow']);
 
         $request = $this->request->getPost();
 
@@ -117,14 +124,14 @@ class DataApi extends \App\Controllers\Modules\Saas\Data
 
         $delete = new \App\Models\Data($this->dbAccounts[$this->subdomain]);
 
-        $tableRecord = $this->loadAccountTables($dataGroup);
+        $tableRecord = $this->data->loadAccountTables($dataGroup);
 
-        if (! $this->validateUserAccessToTable($dataGroup)) {
+        if (! $this->data->validateUserAccessToTable($dataGroup, $this->subdomain)) {
             // Error T09
             throw new \App\Exceptions\GeneralFault(9);
         }
 
-        $delete->inject($this->actualTableName($tableRecord), ['direct_access' => 'allow']);
+        $delete->inject($this->data->actualTableName($tableRecord), ['direct_access' => 'allow']);
 
         $request = $this->request->getPost();
 
@@ -164,14 +171,14 @@ class DataApi extends \App\Controllers\Modules\Saas\Data
     }
 
     /**
-     * Assign a table_key value for all records in sys_table which don't have it
+     * Assign a table_key value for all records in sys_data_object which don't have it
      * @return bool
      */
     public function assign_keys() {
 
         $assign = new \App\Models\Data($this->dbAccounts[$this->subdomain]);
 
-        foreach ($this->loadAccountTables() as $record) {
+        foreach ($this->data->loadAccountTables() as $record) {
             if (strlen($record['table_key'])) continue;
             $assign->assign_key($record['id']);
         }
@@ -339,6 +346,104 @@ ___65:A;66:B;67:C;___
         echo '<pre>';
         echo $str;
     }
+
+    /**
+     * @return $this
+     * @throws \App\Exceptions\GeneralFault
+     */
+    public function export(){
+        /**
+         * where I left off:
+         * todo:
+         *  1. get _application tz offset etc. working
+         *  2. now time to load the spreadsheet
+         *  3. get XLS hooked up
+         *  4. the sharing and the application JS vars was a great idea; incorporate it
+         *  5. table for ideas
+         *      families that want to meet other families
+         *      better short links system - build into SAAS with good boundaries
+         *      lex curators - and the idea for a automated curator to a DMZ to a manager on the other side; and info back on how I'd like to improve that
+         *  6. it's time to bundle this up and give install instructions that work
+         *  7. it's time to vagrantize everything
+         *
+         */
+        $data = new \App\Models\Data($this->dbAccounts[$this->subdomain]);
+
+        $request = $this->request->getPost();
+
+        $original = explode('/', trim($request['request'], '/'));
+
+        //don't pass this through, it's not needed
+        $dataGroup = end($original);
+        $request['request'] = $dataGroup;
+
+        $tableRecord = $this->data->loadAccountTables(str_replace('-', '_', $dataGroup));
+
+        if (! $this->data->validateUserAccessToTable($dataGroup, $this->subdomain)) {
+            // Error T09
+            throw new \App\Exceptions\GeneralFault(9);
+        }
+
+        // Prepare special request items
+        $injectConfig = ['direct_access' => 'allow'];
+        if (!empty($request['_relations'])) {
+            $injectConfig['relations'] = $request['_relations'];
+        }
+
+        $injectConfig = ['direct_access' => 'allow'];
+
+        $data->inject($this->data->actualTableName($tableRecord), $injectConfig);
+
+        $results = $data->export($request);
+        return $this->response
+            ->setStatusCode(200)
+            ->setJSON($results);
+    }
+
+    public function read(){
+        // todo: record successful or unsuccessful download event in master
+        $data = new \App\Models\Data($this->dbAccounts[$this->subdomain]);
+
+        $request = $this->request->getGetPost();
+
+
+        $key = $request['key'];
+        $exportAs = $request['exportAs'];
+        $filename = $request['filename'];
+
+        $error = '';
+
+        //let's use a try-catch because the file system is outside control of our coding
+        try{
+            $file = $exportAs . '-' . $key . '.' . $exportAs;
+            if(file_exists($data->filePath . $file)){
+                if($exportAs === 'xlsx'){
+                    header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+                }else if($exportAs === 'csv'){
+                    header('Content-Type: text/csv');
+                }
+                header('Content-Disposition: attachment; filename="' . $filename . '"');
+                readfile($data->filePath . $file);
+                try{
+                    unlink($data->filePath . $file);
+                }catch(\Exception $e){ }
+                exit;
+            }else{
+                //stream dummy data
+                $error = 'File does not exist';
+            }
+
+        }catch(\Exception $e){
+            $error = $e->getMessage();
+        }
+        if($error){
+            header('Content-Type: text/plain');
+            header('Content-Disposition: attachment; filename="system-error.txt"');
+            echo 'Unable to access or load the specified file';
+            exit;
+        }
+    }
+
 
 
 }

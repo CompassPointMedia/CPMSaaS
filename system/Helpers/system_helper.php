@@ -138,12 +138,12 @@ if(!function_exists('get_page_from_uri')){
 
 
 if(!function_exists('get_uri_from_page_title')){
-    function get_uri_from_page_title($title){
-        $uri = str_replace("'", '', strtolower($title));
-        $uri = str_replace('/', '', $uri);
-        $uri = str_replace(' ', '-', $uri);
-        $uri = preg_replace('/[-]+/', '-', $uri);
-        return $uri;
+    function get_uri_from_page_title($string) {
+        $string = strtolower(trim($string));
+        $string = preg_replace('/[^a-z0-9_ -]/', '', $string);
+        $string = preg_replace('/[ ]/', '-', $string);
+        $string = preg_replace('/[-]{2,}/', '-', $string);
+        return $string;
     }
 }
 

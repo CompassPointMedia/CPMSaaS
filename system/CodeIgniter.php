@@ -18,13 +18,14 @@ use CodeIgniter\Exceptions\FrameworkException;
 use CodeIgniter\Exceptions\PageNotFoundException;
 use CodeIgniter\HTTP\CLIRequest;
 use CodeIgniter\HTTP\DownloadResponse;
-use CodeIgniter\HTTP\RedirectResponse;
+use CodeIgniter\HTTP\IncomingRequest;
 use CodeIgniter\HTTP\Request;
 use CodeIgniter\HTTP\RequestInterface;
 use CodeIgniter\HTTP\ResponseInterface;
 use CodeIgniter\HTTP\URI;
 use CodeIgniter\Router\Exceptions\RedirectException;
 use CodeIgniter\Router\RouteCollectionInterface;
+use CodeIgniter\Router\Router;
 use Config\App;
 use Config\Cache;
 use Config\Services;
@@ -43,7 +44,12 @@ class CodeIgniter
 	/**
 	 * The current version of CodeIgniter Framework
 	 */
-	const CI_VERSION = '4.0.4';
+	const CI_VERSION = '4.1.1';
+
+	/**
+	 * @var string
+	 */
+	private const MIN_PHP_VERSION = '7.3';
 
 	/**
 	 * App startup time.
@@ -76,7 +82,7 @@ class CodeIgniter
 	/**
 	 * Current request.
 	 *
-	 * @var Request|HTTP\IncomingRequest|CLIRequest
+	 * @var Request|IncomingRequest|CLIRequest
 	 */
 	protected $request;
 
@@ -90,7 +96,7 @@ class CodeIgniter
 	/**
 	 * Router to use.
 	 *
-	 * @var Router\Router
+	 * @var Router
 	 */
 	protected $router;
 
@@ -146,6 +152,11 @@ class CodeIgniter
 	 */
 	public function __construct(App $config)
 	{
+		if (version_compare(PHP_VERSION, self::MIN_PHP_VERSION, '<'))
+		{
+			die(lang('Core.invalidPhpVersion', [self::MIN_PHP_VERSION, PHP_VERSION]));
+		}
+
 		$this->startTime = microtime(true);
 		$this->config    = $config;
 	}
@@ -234,7 +245,6 @@ class CodeIgniter
 		// If we have KINT_DIR it means it's already loaded via composer
 		if (! defined('KINT_DIR'))
 		{
-			// @phpstan-ignore-next-line
 			spl_autoload_register(function ($class) {
 				$class = explode('\\', $class);
 
@@ -326,6 +336,7 @@ class CodeIgniter
 
 			$this->response->pretend($this->useSafeOutput)->send();
 			$this->callExit(EXIT_SUCCESS);
+			return;
 		}
 		try
 		{
@@ -342,6 +353,7 @@ class CodeIgniter
 			$this->sendResponse();
 
 			$this->callExit(EXIT_SUCCESS);
+			return;
 		}
 		catch (PageNotFoundException $e)
 		{
@@ -405,6 +417,11 @@ class CodeIgniter
 			if ($possibleResponse instanceof ResponseInterface)
 			{
 				return $returnResponse ? $possibleResponse : $possibleResponse->pretend($this->useSafeOutput)->send();
+			}
+
+			if ($possibleResponse instanceof Request)
+			{
+				$this->request = $possibleResponse;
 			}
 		}
 		$returned = $this->startController();
@@ -668,7 +685,7 @@ class CodeIgniter
 			$output  = $cachedResponse['output'];
 
 			// Clear all default headers
-			foreach ($this->response->headers() as $key => $val)
+			foreach (array_keys($this->response->headers()) as $key)
 			{
 				$this->response->removeHeader($key);
 			}
@@ -1011,13 +1028,10 @@ class CodeIgniter
 			}
 			// @codeCoverageIgnoreEnd
 		}
-		else
+		// When testing, one is for phpunit, another is for test case.
+		elseif (ob_get_level() > 2)
 		{
-			// When testing, one is for phpunit, another is for test case.
-			if (ob_get_level() > 2)
-			{
-				ob_end_flush();
-			}
+			ob_end_flush();
 		}
 
 		throw PageNotFoundException::forPageNotFound(ENVIRONMENT !== 'production' || is_cli() ? $e->getMessage() : '');

@@ -1,38 +1,10 @@
 <?php
 
-/*
- * The MIT License (MIT)
- *
- * Copyright (c) 2013 Jonathan Vollebregt (jnvsor@gmail.com), Rokas Šleinius (raveren@gmail.com)
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy of
- * this software and associated documentation files (the "Software"), to deal in
- * the Software without restriction, including without limitation the rights to
- * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
- * the Software, and to permit persons to whom the Software is furnished to do so,
- * subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
- * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
- * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
- * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- */
-
-namespace Kint\Renderer\Rich;
-
-use Kint\Object\BasicObject;
-use Kint\Renderer\RichRenderer;
-
-abstract class Plugin implements PluginInterface
+abstract class Kint_Renderer_Rich_Plugin
 {
     protected $renderer;
 
-    public function __construct(RichRenderer $r)
+    public function __construct(Kint_Renderer_Rich $r)
     {
         $this->renderer = $r;
     }
@@ -40,24 +12,24 @@ abstract class Plugin implements PluginInterface
     /**
      * Renders a locked header.
      *
-     * @param BasicObject $o
-     * @param string      $content
+     * This is a placeholder until Kint 3 when it can be renamed to
+     * renderLockedHeader after the deprecated static method is removed
      */
-    public function renderLockedHeader(BasicObject $o, $content)
+    public function renderHeaderLocked(Kint_Object $o, $content)
     {
         $header = '<dt class="kint-parent kint-locked">';
 
-        if (RichRenderer::$access_paths && $o->depth > 0 && $ap = $o->getAccessPath()) {
+        if (Kint_Renderer_Rich::$access_paths && $o->depth > 0 && $ap = $o->getAccessPath()) {
             $header .= '<span class="kint-access-path-trigger" title="Show access path">&rlarr;</span>';
         }
 
-        $header .= '<span class="kint-popup-trigger" title="Open in new window">&boxbox;</span><nav></nav>';
+        $header .= '<span class="kint-popup-trigger" title="Open in new window">&rarr;</span><nav></nav>';
 
-        if (null !== ($s = $o->getModifiers())) {
+        if (($s = $o->getModifiers()) !== null) {
             $header .= '<var>'.$s.'</var> ';
         }
 
-        if (null !== ($s = $o->getName())) {
+        if (($s = $o->getName()) !== null) {
             $header .= '<dfn>'.$this->renderer->escape($s).'</dfn> ';
 
             if ($s = $o->getOperator()) {
@@ -65,7 +37,7 @@ abstract class Plugin implements PluginInterface
             }
         }
 
-        if (null !== ($s = $o->getType())) {
+        if (($s = $o->getType()) !== null) {
             $s = $this->renderer->escape($s);
 
             if ($o->reference) {
@@ -75,7 +47,7 @@ abstract class Plugin implements PluginInterface
             $header .= '<var>'.$s.'</var> ';
         }
 
-        if (null !== ($s = $o->getSize())) {
+        if (($s = $o->getSize()) !== null) {
             $header .= '('.$this->renderer->escape($s).') ';
         }
 
@@ -87,4 +59,58 @@ abstract class Plugin implements PluginInterface
 
         return $header.'</dt>';
     }
+
+    public static function renderLockedHeader(Kint_Object $o, $content)
+    {
+        static $show_dep = true;
+
+        if ($show_dep) {
+            trigger_error('Kint_Renderer_Rich_Plugin::renderLockedHeader() is deprecated and will be removed in Kint 3.0. Use renderHeaderLocked instead.', KINT_PHP53 ? E_USER_DEPRECATED : E_USER_NOTICE);
+            $show_dep = false;
+        }
+
+        $header = '<dt class="kint-parent kint-locked">';
+
+        if (Kint_Renderer_Rich::$access_paths && $o->depth > 0 && $ap = $o->getAccessPath()) {
+            $header .= '<span class="kint-access-path-trigger" title="Show access path">&rlarr;</span>';
+        }
+
+        $header .= '<span class="kint-popup-trigger" title="Open in new window">&rarr;</span><nav></nav>';
+
+        if (($s = $o->getModifiers()) !== null) {
+            $header .= '<var>'.$s.'</var> ';
+        }
+
+        if (($s = $o->getName()) !== null) {
+            $header .= '<dfn>'.Kint_Object_Blob::escape($s).'</dfn> ';
+
+            if ($s = $o->getOperator()) {
+                $header .= Kint_Object_Blob::escape($s, 'ASCII').' ';
+            }
+        }
+
+        if (($s = $o->getType()) !== null) {
+            $s = Kint_Object_Blob::escape($s);
+
+            if ($o->reference) {
+                $s = '&amp;'.$s;
+            }
+
+            $header .= '<var>'.$s.'</var> ';
+        }
+
+        if (($s = $o->getSize()) !== null) {
+            $header .= '('.Kint_Object_Blob::escape($s).') ';
+        }
+
+        $header .= $content;
+
+        if (!empty($ap)) {
+            $header .= '<div class="access-path">'.Kint_Object_Blob::escape($ap).'</div>';
+        }
+
+        return $header.'</dt>';
+    }
+
+    abstract public function render($o);
 }

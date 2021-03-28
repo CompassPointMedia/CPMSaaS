@@ -43,8 +43,6 @@ class Request extends Message implements MessageInterface, RequestInterface
 	 */
 	protected $uri;
 
-	//--------------------------------------------------------------------
-
 	/**
 	 * Constructor.
 	 *
@@ -54,7 +52,9 @@ class Request extends Message implements MessageInterface, RequestInterface
 	 */
 	public function __construct($config = null)
 	{
-		/** @deprecated $this->proxyIps property will be removed in the future */
+		/**
+		 * @deprecated $this->proxyIps property will be removed in the future
+		 */
 		$this->proxyIPs = $config->proxyIPs;
 
 		if (empty($this->method))
@@ -67,8 +67,6 @@ class Request extends Message implements MessageInterface, RequestInterface
 			$this->uri = new URI();
 		}
 	}
-
-	//--------------------------------------------------------------------
 
 	/**
 	 * Validate an IP address
@@ -85,8 +83,6 @@ class Request extends Message implements MessageInterface, RequestInterface
 		return (new FormatRules())->valid_ip($ip, $which);
 	}
 
-	//--------------------------------------------------------------------
-
 	/**
 	 * Get the request method.
 	 *
@@ -100,8 +96,6 @@ class Request extends Message implements MessageInterface, RequestInterface
 	{
 		return ($upper) ? strtoupper($this->method) : strtolower($this->method);
 	}
-
-	//--------------------------------------------------------------------
 
 	/**
 	 * Sets the request method. Used when spoofing the request.
@@ -124,23 +118,23 @@ class Request extends Message implements MessageInterface, RequestInterface
 	 *
 	 * @param string $method
 	 *
-	 * @return self
+	 * @return static
 	 */
 	public function withMethod($method)
 	{
-		$clone = clone $this;
+		$request = clone $this;
 
-		return $clone->setMethod($method);
+		$request->method = $method;
+
+		return $request;
 	}
 
-	//--------------------------------------------------------------------
-
-    /**
-     * Retrieves the URI instance.
-     *
-     * @return URI
-     */
-    public function getUri()
+	/**
+	 * Retrieves the URI instance.
+	 *
+	 * @return URI
+	 */
+	public function getUri()
 	{
 		return $this->uri;
 	}

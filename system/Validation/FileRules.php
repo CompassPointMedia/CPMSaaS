@@ -23,7 +23,7 @@ class FileRules
 	/**
 	 * Request instance. So we can get access to the files.
 	 *
-	 * @var \CodeIgniter\HTTP\RequestInterface
+	 * @var RequestInterface
 	 */
 	protected $request;
 
@@ -263,7 +263,7 @@ class FileRules
 				return true;
 			}
 
-			if (! in_array($file->getExtension(), $params, true))
+			if (! in_array($file->guessExtension(), $params, true))
 			{
 				return false;
 			}

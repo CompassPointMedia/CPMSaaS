@@ -1,10 +1,13 @@
 <?php
 namespace CodeIgniter\Test;
 
+use App\Controllers\Home;
 use CodeIgniter\Log\Logger;
 use CodeIgniter\Test\Mock\MockLogger as LoggerConfig;
 use Config\App;
 use Config\Services;
+use InvalidArgumentException;
+use Tests\Support\Controllers\Popcorn;
 
 /**
  * Exercise our Controller class.
@@ -12,24 +15,13 @@ use Config\Services;
  * @runTestsInSeparateProcesses
  * @preserveGlobalState         disabled
  */
-class ControllerTesterTest extends \CodeIgniter\Test\CIUnitTestCase
+class ControllerTesterTest extends CIUnitTestCase
 {
-
 	use ControllerTester;
-
-	public function setUp(): void
-	{
-		parent::setUp();
-	}
-
-	public function tearDown(): void
-	{
-		parent::tearDown();
-	}
 
 	public function testBadController()
 	{
-		$this->expectException(\InvalidArgumentException::class);
+		$this->expectException(InvalidArgumentException::class);
 		$logger = new Logger(new LoggerConfig());
 		$result = $this->withURI('http://example.com')
 				->withLogger($logger)
@@ -39,11 +31,11 @@ class ControllerTesterTest extends \CodeIgniter\Test\CIUnitTestCase
 
 	public function testBadControllerMethod()
 	{
-		$this->expectException(\InvalidArgumentException::class);
+		$this->expectException(InvalidArgumentException::class);
 		$logger = new Logger(new LoggerConfig());
 		$result = $this->withURI('http://example.com')
 				->withLogger($logger)
-				->controller(\App\Controllers\Home::class)
+				->controller(Home::class)
 				->execute('nothere');
 	}
 
@@ -52,7 +44,7 @@ class ControllerTesterTest extends \CodeIgniter\Test\CIUnitTestCase
 		$logger = new Logger(new LoggerConfig());
 		$result = $this->withURI('http://example.com')
 				->withLogger($logger)
-				->controller(\App\Controllers\Home::class)
+				->controller(Home::class)
 				->execute('index');
 
 		$body = $result->getBody();
@@ -62,7 +54,7 @@ class ControllerTesterTest extends \CodeIgniter\Test\CIUnitTestCase
 	public function testControllerWithoutLogger()
 	{
 		$result = $this->withURI('http://example.com')
-				->controller(\App\Controllers\Home::class)
+				->controller(Home::class)
 				->execute('index');
 
 		$body = $result->getBody();
@@ -74,7 +66,7 @@ class ControllerTesterTest extends \CodeIgniter\Test\CIUnitTestCase
 		$logger = new Logger(new LoggerConfig());
 		$result = $this->withURI('http://example.com')
 				->withLogger($logger)
-				->controller(\Tests\Support\Controllers\Popcorn::class)
+				->controller(Popcorn::class)
 				->execute('index');
 
 		$body = $result->getBody();
@@ -86,7 +78,7 @@ class ControllerTesterTest extends \CodeIgniter\Test\CIUnitTestCase
 		$logger = new Logger(new LoggerConfig());
 		$result = $this->withURI('http://example.com')
 				->withLogger($logger)
-				->controller(\Tests\Support\Controllers\Popcorn::class)
+				->controller(Popcorn::class)
 				->execute('index');
 
 		$body = $result->getBody();
@@ -98,7 +90,7 @@ class ControllerTesterTest extends \CodeIgniter\Test\CIUnitTestCase
 		$logger = new Logger(new LoggerConfig());
 		$result = $this->withURI('http://example.com')
 				->withLogger($logger)
-				->controller(\Tests\Support\Controllers\Popcorn::class)
+				->controller(Popcorn::class)
 				->execute('pop');
 
 		$this->assertEquals(567, $result->response()->getStatusCode());
@@ -109,7 +101,7 @@ class ControllerTesterTest extends \CodeIgniter\Test\CIUnitTestCase
 		$logger = new Logger(new LoggerConfig());
 		$result = $this->withURI('http://example.com')
 				->withLogger($logger)
-				->controller(\Tests\Support\Controllers\Popcorn::class)
+				->controller(Popcorn::class)
 				->execute('popper');
 
 		$this->assertEquals(500, $result->response()->getStatusCode());
@@ -127,7 +119,7 @@ class ControllerTesterTest extends \CodeIgniter\Test\CIUnitTestCase
 				->withResponse(Services::response($config))
 				->withLogger($logger)
 				->withBody($body)
-				->controller(\Tests\Support\Controllers\Popcorn::class)
+				->controller(Popcorn::class)
 				->execute('index');
 
 		$body = $result->getBody();
@@ -139,7 +131,7 @@ class ControllerTesterTest extends \CodeIgniter\Test\CIUnitTestCase
 		$logger = new Logger(new LoggerConfig());
 		$result = $this->withURI('http://example.com')
 				->withLogger($logger)
-				->controller(\Tests\Support\Controllers\Popcorn::class)
+				->controller(Popcorn::class)
 				->execute('popper');
 
 		$req = $result->request();
@@ -151,7 +143,7 @@ class ControllerTesterTest extends \CodeIgniter\Test\CIUnitTestCase
 		$logger = new Logger(new LoggerConfig());
 		$result = $this->withURI('http://example.com')
 				->withLogger($logger)
-				->controller(\Tests\Support\Controllers\Popcorn::class)
+				->controller(Popcorn::class)
 				->execute('oops');
 
 		$this->assertFalse($result->isOK());
@@ -163,7 +155,7 @@ class ControllerTesterTest extends \CodeIgniter\Test\CIUnitTestCase
 		$logger = new Logger(new LoggerConfig());
 		$result = $this->withURI('http://example.com')
 				->withLogger($logger)
-				->controller(\Tests\Support\Controllers\Popcorn::class)
+				->controller(Popcorn::class)
 				->execute('weasel');
 
 		$body = $result->getBody(); // empty
@@ -176,7 +168,7 @@ class ControllerTesterTest extends \CodeIgniter\Test\CIUnitTestCase
 		$logger = new Logger(new LoggerConfig());
 		$result = $this->withURI('http://example.com')
 				->withLogger($logger)
-				->controller(\Tests\Support\Controllers\Popcorn::class)
+				->controller(Popcorn::class)
 				->execute('goaway');
 
 		$this->assertTrue($result->isRedirect());
@@ -187,7 +179,7 @@ class ControllerTesterTest extends \CodeIgniter\Test\CIUnitTestCase
 		$logger = new Logger(new LoggerConfig());
 		$result = $this->withURI('http://example.com')
 				->withLogger($logger)
-				->controller(\Tests\Support\Controllers\Popcorn::class)
+				->controller(Popcorn::class)
 				->execute('index');
 
 		$this->assertTrue($result->see('Hi'));
@@ -198,7 +190,7 @@ class ControllerTesterTest extends \CodeIgniter\Test\CIUnitTestCase
 		$logger = new Logger(new LoggerConfig());
 		$result = $this->withURI('http://example.com')
 				->withLogger($logger)
-				->controller(\Tests\Support\Controllers\Popcorn::class)
+				->controller(Popcorn::class)
 				->execute('index');
 
 		// won't fail, but doesn't do anything
@@ -209,7 +201,7 @@ class ControllerTesterTest extends \CodeIgniter\Test\CIUnitTestCase
 	public function testResponseOverriding()
 	{
 		$result = $this->withURI('http://example.com/rest/')
-				->controller(\Tests\Support\Controllers\Popcorn::class)
+				->controller(Popcorn::class)
 				->execute('index3');
 
 		$response = json_decode($result->getBody());
@@ -221,7 +213,7 @@ class ControllerTesterTest extends \CodeIgniter\Test\CIUnitTestCase
 	{
 		$logger = new Logger(new LoggerConfig());
 		$result = $this->withLogger($logger)
-					   ->controller(\App\Controllers\Home::class)
+					   ->controller(Home::class)
 					   ->execute('index');
 
 		$body = $result->getBody();
@@ -230,7 +222,7 @@ class ControllerTesterTest extends \CodeIgniter\Test\CIUnitTestCase
 
 	public function testRedirectRoute()
 	{
-		$result = $this->controller(\Tests\Support\Controllers\Popcorn::class)
+		$result = $this->controller(Popcorn::class)
 						->execute('toindex');
 		$this->assertTrue($result->isRedirect());
 	}

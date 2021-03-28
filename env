@@ -36,6 +36,8 @@
 # app.cookieSecure = false
 # app.cookieHTTPOnly = false
 # app.cookieSameSite = 'Lax'
+# app.cookieRaw = false
+# app.cookieExpires = 0
 
 # app.CSRFProtection  = false
 # app.CSRFTokenName   = 'csrf_test_name'
@@ -78,6 +80,7 @@
 # contentsecuritypolicy.fontSrc = null
 # contentsecuritypolicy.formAction = null
 # contentsecuritypolicy.frameAncestors = null
+# contentsecuritypolicy.frameSrc = null
 # contentsecuritypolicy.mediaSrc = null
 # contentsecuritypolicy.objectSrc = null
 # contentsecuritypolicy.pluginTypes = null
@@ -115,3 +118,9 @@
 # security.regenerate = true
 # security.redirect   = true
 # security.samesite   = 'Lax'
+
+#--------------------------------------------------------------------
+# LOGGER
+#--------------------------------------------------------------------
+
+# logger.threshold = 4

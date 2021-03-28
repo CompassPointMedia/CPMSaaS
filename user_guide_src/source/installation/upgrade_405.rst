@@ -6,7 +6,7 @@ Upgrading from 4.0.4 to 4.0.5
 
 CodeIgniter 4.0.5 introduces a setting for the cookie SameSite attribute. Prior versions did not set this
 attribute at all. The default setting for cookies is now `Lax`. This will affect how cookies are handled in
-cross-domain contexts and you may need to adjust this setting in your projects. Separate settings in `config/App.php`
+cross-domain contexts and you may need to adjust this setting in your projects. Separate settings in `app/Config/App.php`
 exists for Response cookies and for CSRF cookies.
 
 For additional information, see `MDN Web Docs <https://developer.mozilla.org/pl/docs/Web/HTTP/Headers/Set-Cookie/SameSite>`_.
@@ -57,3 +57,8 @@ updated requirements. These methods are as follows:
 
 To facilitate use of this interface these methods have been moved from the framework's ``Response`` into a ``ResponseTrait``
 which you may use, and ``DownloadResponse`` now extends ``Response`` directly to ensure maximum compatibility.
+
+**Config\Services**
+
+Service discovery has been updated to allow third-party services (when enabled via Modules) to take precedence over core services. Update
+**app/Config/Services.php** so the class extends ``CodeIgniter\Config\BaseService`` to allow proper discovery of third-party services.

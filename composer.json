@@ -10,7 +10,7 @@
 		"ext-intl": "*",
 		"ext-json": "*",
 		"ext-mbstring": "*",
-		"box/spout": "2.7",
+		"box/spout": "3.2.0",
 		"compasspointmedia/julietmenu": "^2.0",
 		"laminas/laminas-escaper": "^2.6",
 		"psr/log": "^1.1"

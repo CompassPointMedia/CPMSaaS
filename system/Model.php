@@ -650,7 +650,7 @@ class Model extends BaseModel
 	 *
 	 * @throws ReflectionException
 	 */
-	public function insert($data = null, bool $returnID = true)
+	public function coreInsert($data = null, bool $returnID = true)
 	{
 		if (! empty($this->tempData['data']))
 		{
@@ -682,7 +682,7 @@ class Model extends BaseModel
 	 *
 	 * @throws ReflectionException
 	 */
-	public function update($id = null, $data = null): bool
+	public function coreUpdate($id = null, $data = null): bool
 	{
 		if (! empty($this->tempData['data']))
 		{
@@ -778,7 +778,15 @@ class Model extends BaseModel
 	 */
 	public function __call(string $name, array $params)
 	{
+	    if ($name === 'update' || $name === 'insert') {
+	        $name = 'core' . ucwords($name);
+        }
+
 		$result = parent::__call($name, $params);
+
+	    if ($name === 'coreUpdate' || $name === 'coreInsert') {
+	        return $result;
+        }
 
 		if ($result === null && method_exists($builder = $this->builder(), $name))
 		{

@@ -903,13 +903,13 @@ class Data extends Model{
                 }
 
                 $sql = "INSERT INTO $root_table SET $paramStr";
-                $result = $this->cnx->query($sql);
+                $this->cnx->query($sql);
 
                 if(count($primary) > 1){
                     $query = $this->cnx->table($root_table)->getWhere($primary);
                     $primaryKeyString = implode('-', $primary);
                 }else{
-                    $insert_id = $result->connID->insert_id;
+                    $insert_id = $this->cnx->connID->insert_id;
                     $key = implode('', array_keys($primary));
                     $query = $this->cnx->table($root_table)->getWhere([$key => $insert_id]);
                     $primaryKeyString = $insert_id;
@@ -1191,7 +1191,11 @@ $indexCreateString
             if (!preg_match('/^[0-9]+$/', $nameOrId)) exit('Group name must not be a number');
             $sql = "INSERT INTO sys_data_object_group SET name = '" . addslashes($nameOrId) . "'";
             $result = $this->cnx->query($sql);
-            return $result->connID->insert_id;
+            if ($result) {
+                return $this->cnx->connID->insert_id;
+            }
+            //todo: log error
+            return null;
         }
     }
 

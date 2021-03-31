@@ -652,6 +652,8 @@ if (! function_exists('url_to'))
 	}
 }
 
+//--------------------------------------------------------------------
+
 if (! function_exists('url_is'))
 {
 	/**
@@ -675,3 +677,68 @@ if (! function_exists('url_is'))
 		return (bool) preg_match("|^{$path}$|", $currentPath, $matches);
 	}
 }
+
+//--------------------------------------------------------------------
+
+if (! function_exists('determine_subdomain'))
+{
+    /**
+     * Examines the HTTP_HOST to get a best match for the subdomain. It
+     * won't be perfect, but should work for our needs.
+     *
+     * It's especially not perfect since it's possible to register a domain
+     * with a period (.) as part of the domain name.
+     *
+     * @param string $url           Optional URL; if not passed server HTTP_HOST will be used.
+     * @param bool $returnAsArray   Default false; if true an array of all segments is returned.
+     *
+     * @return mixed
+     */
+    function determine_subdomain($url = null, $returnAsArray = false) {
+        // We have to ensure that a scheme exists
+        // on the URL else parse_url will mis-interpret
+        // 'host' as the 'path'.
+        if (! $url) {
+            $url = $_SERVER['HTTP_HOST'];
+        }
+        if (strpos($url, 'http') !== 0) {
+            $url = 'http://' . $url;
+        }
+
+        $parsedUrl = parse_url($url);
+
+        $host = explode('.', $parsedUrl['host']);
+
+        // Normally www is window dressing, quite standard, and provides no information
+        if ($host[0] === 'www') {
+            unset($host[0]);
+        }
+
+        // Get rid of TLD, which will be the last; @todo save the $tld var somewhere
+        $tld = array_pop($host);
+
+        // Account for .co.uk, .co.nz, etc. domains
+        if (end($host) === 'co') {
+            $host = array_slice($host, 0, -1);
+        }
+
+        // If we only have 1 part left, then we don't have a sub-domain.
+        if (count($host) === 1) {
+            // Set it to false so we don't make it back here again.
+            return false;
+        }
+
+        if ($returnAsArray)
+        {
+            // We assume the far right element is the most significant,
+            // so we reverse the array; $host[0] should be present, but
+            // other elements if present may have meaning to the caller.
+            return array_reverse(array_slice($host, 0, -1));
+        }
+        else
+        {
+            return array_shift($host);
+        }
+    }
+}
+

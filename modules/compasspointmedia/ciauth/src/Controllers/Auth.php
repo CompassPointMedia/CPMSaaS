@@ -268,10 +268,10 @@ class Auth extends BaseController {
 
 
         // Store this as a successful login
-        $result = $this->dbMaster->query("INSERT INTO sys_login SET 
+        $result = $this->dbMaster->query("INSERT INTO sys_login SET
         user_id = $user_id,
         account_id = $account_id");
-        $login_id = $result->connID->insert_id;
+        $login_id = $this->dbMaster->connID->insert_id;
 
 
         // Set their session login!! Version 1.0

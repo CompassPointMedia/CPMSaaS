@@ -12,6 +12,7 @@
 namespace CodeIgniter;
 
 use Closure;
+use CodeIgniter\Autoloader\Autoloader;
 use CodeIgniter\Debug\Timer;
 use CodeIgniter\Events\Events;
 use CodeIgniter\Exceptions\FrameworkException;
@@ -33,6 +34,8 @@ use Exception;
 use Kint;
 use Kint\Renderer\CliRenderer;
 use Kint\Renderer\RichRenderer;
+
+use \CodeIgniter\Autoloader\FileLocator;
 
 /**
  * This class is the core of the framework, and will analyse the
@@ -184,19 +187,22 @@ class CodeIgniter
 		}
 
 		// Set default locale on the server
-		locale_set_default($this->config->defaultLocale ?? 'en');
+		// locale_set_default($this->config->defaultLocale ?? 'en');
 
 		// Set default timezone on the server
 		date_default_timezone_set($this->config->appTimezone ?? 'UTC');
 
-		$this->initializeKint();
 
-		if (! CI_DEBUG)
-		{
-			// @codeCoverageIgnoreStart
-			Kint::$enabled_mode = false;
-			// @codeCoverageIgnoreEnd
-		}
+        /*
+        $this->initializeKint();
+
+        if (! CI_DEBUG)
+        {
+            // @codeCoverageIgnoreStart
+            Kint::$enabled_mode = false;
+            // @codeCoverageIgnoreEnd
+        }
+        */
 	}
 
 	//--------------------------------------------------------------------
@@ -456,26 +462,26 @@ class CodeIgniter
 		}
 
 		// If $returned is a string, then the controller output something,
-		// probably a view, instead of echoing it directly. Send it along
-		// so it can be used with the output.
+		// probably a view. Instead of echoing it directly, send it along
+		// so it can be used with the output.  This will operate on $this->response
 		$this->gatherOutput($cacheConfig, $returned);
 
 		// Never run filters when running through Spark cli
-		if (! defined('SPARKED'))
+		if (defined('SPARKED'))
 		{
-			$filters->setResponse($this->response);
-			// Run "after" filters
-			$response = $filters->run($uri, 'after');
+            $response = $this->response;
+
+            // Set response code for CLI command failures
+            if (is_numeric($returned) || $returned === false)
+            {
+                $response->setStatusCode(400);
+            }
 		}
 		else
 		{
-			$response = $this->response;
-
-			// Set response code for CLI command failures
-			if (is_numeric($returned) || $returned === false)
-			{
-				$response->setStatusCode(400);
-			}
+            $filters->setResponse($this->response);
+            // Run "after" filters
+            $response = $filters->run($uri, 'after');
 		}
 
 		if ($response instanceof ResponseInterface)
@@ -673,7 +679,7 @@ class CodeIgniter
 	 */
 	public function displayCache(Cache $config)
 	{
-		if ($cachedResponse = cache()->get($this->generateCacheName($config)))
+        if ($cachedResponse = cache()->get($this->generateCacheName($config)))
 		{
 			$cachedResponse = unserialize($cachedResponse);
 			if (! is_array($cachedResponse) || ! isset($cachedResponse['output']) || ! isset($cachedResponse['headers']))
@@ -937,7 +943,7 @@ class CodeIgniter
             // since neither Controller or BaseController classes have constructor methods.
             // If $this->controller is already a passed object then it will already be
             // instantiated, but won't have the benefit of this construction.
-            $class = new $this->controller(...$this->router->controllerConstructor());
+            $class = new $this->controller(...$this->router->controllerConstructor()); // @phpstan-ignore-line
         }
         else
         {

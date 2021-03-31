@@ -711,7 +711,7 @@ abstract class BaseModel
 	 *
 	 * @throws ReflectionException
 	 */
-	public function insert($data = null, bool $returnID = true)
+	public function coreInsert($data = null, bool $returnID = true)
 	{
 		$this->insertID = 0;
 
@@ -853,7 +853,7 @@ abstract class BaseModel
 	 *
 	 * @throws ReflectionException
 	 */
-	public function update($id = null, $data = null): bool
+	public function coreUpdate($id = null, $data = null): bool
 	{
 		if (is_numeric($id) || is_string($id))
 		{
@@ -984,7 +984,7 @@ abstract class BaseModel
 	 *
 	 * @throws DatabaseException
 	 */
-	public function delete($id = null, bool $purge = false)
+	public function coreDelete($id = null, bool $purge = false)
 	{
 		if ($id && (is_numeric($id) || is_string($id)))
 		{
@@ -1724,6 +1724,12 @@ abstract class BaseModel
 	 */
 	public function __call(string $name, array $params)
 	{
+
+        if ($name === 'update' || $name === 'insert' || $name === 'delete' || $name === 'coreUpdate' || $name === 'coreInsert' || $name === 'coreDelete') {
+            if (!strstr($name, 'core')) $name = 'core' . ucwords($name);
+            return $this->{$name}(...$params);
+        }
+
 		if (method_exists($this->db, $name))
 		{
 			return $this->db->{$name}(...$params);

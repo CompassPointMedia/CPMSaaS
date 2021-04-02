@@ -150,7 +150,16 @@ var injector = {
                     }
                     break;
                 case $a['item_type'] === 'configuration';
-                    $config[$a['node']][$a['path']][$a['field_name']][$a['attribute']] = $value;
+                    /**
+                     * 2021-04-01: added the case where attribute is blank; this specifically resolved misconfiguration for orderBy
+                     * There is still a lot of thought that needs to go into how this is parsed, and rules need to be documented so
+                     * that we don't have all kinds of variations that may or may not work
+                     */
+                    if (!strlen($a['attribute'])) {
+                        $config[$a['node']][$a['path']][$a['field_name']] = $value;
+                    } else {
+                        $config[$a['node']][$a['path']][$a['field_name']][$a['attribute']] = $value;
+                    }
                     break;
             }
         }

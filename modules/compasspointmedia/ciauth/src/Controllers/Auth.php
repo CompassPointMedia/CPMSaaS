@@ -215,7 +215,7 @@ class Auth extends BaseController {
             $template = config('Database')->master;
             $template['username'] = $account['system_username'];
             $template['password'] = $account['system_password'];
-            $template['database'] = 'cpmsaas_' . $account['unique_identifier'];
+            $template['database'] = strtolower($account['identifier']) === AuthModel::$adminSubdomain ? 'compasspoint_saas' : 'cpmsaas_' . $account['unique_identifier'];
 
             $cnx = $this->dbAccounts[$account['identifier']] = \Config\Database::connect($template);
 

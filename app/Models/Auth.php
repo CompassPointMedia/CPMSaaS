@@ -22,13 +22,20 @@ class Auth extends Model
 
     CONST PERM_SAAS_GUEST = 4;
 
-    CONST PERM_CPM_SAAS_ACCOLYTE = 2;
+    CONST PERM_CPM_SAAS_ACOLYTE = 2;
 
     /**
      * Minimum access levels.
      */
     CONST MIN_SAAS_ACCESS_LEVEL = 4;
     CONST MIN_SYSTEM_ACCESS_LEVEL = 256;
+
+
+    /**
+     * Change this if you wish to have a different portal manager subdomain besides admin.your-saas-application.com
+     * @var string $adminSubdomain
+     */
+    public static $adminSubdomain = 'admin';
 
 
 }

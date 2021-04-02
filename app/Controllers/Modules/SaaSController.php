@@ -251,7 +251,8 @@ class SaaSController extends \App\Controllers\BaseController implements \CodeIgn
         $template = config('Database')->master;
         $template['username'] = $subdomainAccount->system_username;
         $template['password'] = $subdomainAccount->system_password;
-        $template['database'] = 'cpmsaas_' . $subdomainAccount->unique_identifier;
+        $template['database'] = strtolower($subdomainAccount->identifier) === AuthModel::$adminSubdomain ?
+            'compasspoint_saas' : 'cpmsaas_' . $subdomainAccount->unique_identifier;
 
         return \Config\Database::connect($template);
     }

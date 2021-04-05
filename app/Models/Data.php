@@ -204,7 +204,7 @@ class Data extends Model{
         $start = microtime(true);
 
         //get structure
-        $structure = $this->structure($root_table);
+        $structure = $this->structure($root_table, $this->cnx->database);
 
         //markup structure with meta data
         foreach($structure as $n=> $v){
@@ -226,34 +226,9 @@ class Data extends Model{
             (is_array($request['_mask']) ? $request['_mask'] : explode(',', trim($request['_mask'])));
 
 
-        //nice job, CodeIgniter..
-        $result = $this->cnx->query('EXPLAIN ' . $root_table);
-        foreach($result->getResultArray() as $v){
-            $field = $v['Field'];
-
+        foreach ($structure as $field => $null) {
             if (in_array($field, $maskRequest)) {
                 $maskRequestValid[] = $field;
-            }
-
-            if(substr($v['Type'], 0, 4) === 'enum' || $v['Type'] === 'set'){
-                $enum = explode("','", substr($v['Type'], 6, strlen($v['Type']) - 8));
-                $data_range = [];
-                foreach($enum as $w){
-                    $data_range[$w] = $w;
-                }
-                $structure[$field]['data_range'] = $data_range;
-                if($v['Type'] === 'set'){
-                    $structure[$field]['set'] = true;
-                }
-            }
-            if(preg_match('/('.$this->genericSqlNumberFields.')\(/i', $v['Type'])){
-                $structure[$field]['unsigned'] = stristr($v['Type'], 'unsigned') !== false;
-            }
-            if(preg_match('/\(([0-9]+),([0-9]+)\)/', $v['Type'], $m)){
-                $structure[$field]['decimal'] = $m[2];
-            }
-            if(in_array($v['Type'], ['datetime', 'date', 'time', 'timestamp'])){
-                $structure[$field]['intent'] = $v['Type'];
             }
         }
 
@@ -390,7 +365,7 @@ class Data extends Model{
                             }
                             $subRequest['id'] = '|IN|' . implode('|', array_keys($id));
                         }
-                        $subMeta = ['minimal' => true];
+                        $subMeta = ['minimal' => true, 'relation' => true];
                         // ---------------------------------------------------------
                         // ---------------------------------------------------------
 
@@ -766,12 +741,6 @@ class Data extends Model{
             }
         }
 
-        /* todo: this was copied from update() and we really need the advanced structure that request() provides..
-        //we do this because returned structure from request() has more analysis and information;
-        //we just needed a basic structure to get the original.
-        $structure = $original['structure'];
-        */
-
         //catalog changes
         $changes = [];
         $defaults = [];
@@ -783,6 +752,9 @@ class Data extends Model{
                 if( !empty($dataGroup['omitBlankInserts']) && in_array($n, $dataGroup['omitBlankInserts'])){
                     continue;
                 }else if($structure[$n]['default'] === 'CURRENT_TIMESTAMP'){
+                    continue;
+                }else if($structure[$n]['default'] === null) {
+                    //MySQL EXPLAIN returns a literal null value when the default is null
                     continue;
                 }
             }
@@ -841,7 +813,7 @@ class Data extends Model{
         //handle dataGroup defaults not specified above
         if(!empty($dataGroup['defaults'])){
             foreach($dataGroup['defaults'] as $field => $v){
-                if(!$structure[$field]) continue;           //this column isn't present so why bother
+                if(empty($structure[$field])) continue;         //this column isn't present so why bother
                 if(!empty($defaults[$field])) continue;         //already handled
 
                 foreach($dataGroup['defaults'][$field] as $modes => $default){
@@ -1426,25 +1398,71 @@ $indexCreateString
     }
 
     /**
+     * Get table information with minimal information, or more.
      * @vetted
-     * @param $table
+     * @param $table string
+     * @param $database string
      * @return array
      */
-    public function structure($table){
-        $fields = [];
-        $sql = 'EXPLAIN ' . $table;
-        $result = $this->cnx->query($sql);
-        foreach($result->getResultArray() as $v){
-            $e = explode('(', $v['Type']);
-            $fields[$v['Field']] = [
-                'name' => $v['Field'],
-                'type' => $e[0],
-                'max_length' => !empty($e[1]) ? str_replace(')', '', $e[1]) : '',
-                'default' => $v['Default'],
-                'primary_key' => isset($v['Key']) && $v['Key'] === 'PRI' ? 1 : 0,
-            ];
+    public function structure($table, $database = ''){
+        $additional = [];
+        if ($database) {
+            $sql = "SELECT column_name, data_type, character_set_name, collation_name FROM INFORMATION_SCHEMA.COLUMNS 
+  WHERE table_schema = '$database' AND table_name = '$table'";
+            $result = $this->cnx->query($sql);
+            foreach ($result->getResultArray() as $v) {
+                $additional[$v['column_name']] = [
+                    'data_type' => $v['data_type'],
+                    'character_set_name' => $v['character_set_name'],
+                    'collation_name' => $v['collation_name'],
+                ];
+            }
         }
-        return $fields;
+
+        $structure = [];
+        $sql = 'EXPLAIN `' . ($database ? $database . '`.`' : '') . $table . '`';
+        $result = $this->cnx->query($sql);
+
+        foreach($result->getResultArray() as $v){
+            $a = [];
+            $field = $v['Field'];
+            $e = explode('(', $v['Type']);
+
+            $a['name'] = $field;
+            $a['type'] = $e[0];
+            $a['max_length'] = !empty($e[1]) ? str_replace(')', '', $e[1]) : '';
+            $a['default'] = $v['Default'];
+            $a['primary_key'] = isset($v['Key']) && $v['Key'] === 'PRI' ? 1 : 0;
+
+            if(substr($v['Type'], 0, 4) === 'enum' || $v['Type'] === 'set'){
+                $enum = explode("','", substr($v['Type'], 6, strlen($v['Type']) - 8));
+                $data_range = [];
+                foreach($enum as $w){
+                    $data_range[$w] = $w;
+                }
+                $a['data_range'] = $data_range;
+                if($v['Type'] === 'set'){
+                    $a['set'] = true;
+                }
+            }
+            if(preg_match('/('.$this->genericSqlNumberFields.')\(/i', $v['Type'])){
+                $a['unsigned'] = stristr($v['Type'], 'unsigned') !== false;
+            }
+            if(preg_match('/\(([0-9]+),([0-9]+)\)/', $v['Type'], $m)){
+                $a['decimal'] = $m[2];
+            }
+            if(in_array($v['Type'], ['datetime', 'date', 'time', 'timestamp'])){
+                $a['intent'] = $v['Type'];
+            }
+            if(!empty($additional[$field])) {
+                $a['character_set_name'] = $additional[$field]['character_set_name'];
+                $a['collation_name'] = $additional[$field]['collation_name'];
+            }
+
+            $structure[$field] = $a;
+        }
+
+        return $structure;
     }
 
     /**

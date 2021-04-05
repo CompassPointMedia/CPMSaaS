@@ -60,14 +60,15 @@ class Data extends \App\Controllers\BaseController
         }
 
         //------------ CPMSAAS-7 -------------
+        $structure = $this->data->structure($this->data->actualTableName($table));
         $javascript = $this->cvt->dataGroupJavascriptV2(
             $table['table_key'],
-            $this->data->structure($this->data->actualTableName($table))
+            $structure
         );
 
         $config = $this->cvt->dataGroupJavascriptConfigV1(
             $table['table_key'],
-            $this->data->structure($this->data->actualTableName($table))
+            $structure
         );
 
         echo view('pages/data_view', [

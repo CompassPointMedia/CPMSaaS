@@ -607,6 +607,11 @@ Vue.component('generic_select', {
 				display = this.$parent.db.getLabel(relation.structure);
 
 				for(i in relation.dataset){
+					//catch different label on the fly
+                    if (relation.dataset[i]._label) {
+                    	display = '_label';
+                    }
+
 					//note string conversion
 					range['' + relation.dataset[i][primary] + ''] = relation.dataset[i][display];
 				}
@@ -812,7 +817,7 @@ Vue.component('search-widget-daterange', {
 
 Vue.component('generic-cell', {
 	props: ['datarow', 'index', 'field', 'val'],
-	template: '<span :class="style()" @dblclick="single_field_edit()">{{ format(val) }}</span>',
+	template: '<span :class="style()" @dblclick="single_field_edit()" v-html="format(val)"></span>',
     methods: {
 		/**
          * todo:
@@ -895,6 +900,12 @@ Vue.component('generic-cell', {
 					}
                 }
             }
+
+            // Handle formatting for textareas
+            // this is short of having a tinyMCE area but makes user content edited through a textarea workable and visible
+            val = val.replace(/\t/g, '&nbsp;&nbsp;&nbsp;&nbsp;');
+            val = val.replace(/\n/g, '<br />' + "\n");
+
 			return val;
         },
         style: function(){
@@ -2234,6 +2245,8 @@ Vue.component('cvt', {
         			if(this.editMode === this.layout.columns[column].hideFromEdit) return false;
                 }
             }
+
+            // todo: this is opinionated and needs to be removed, and specific reserved field names be considered (and overridable but would be hidden 99.9% of the time)
             if(this.editMode === 'insert' && this.settings.hideTimestampOnInsert !== false  && column_structure.type === 'timestamp'){
         		return false;
             }
@@ -2603,4 +2616,21 @@ if(false){
         serverTime: 'September 13, 2018 21:21:49',
     }
 }
+
+/**
+ * todo: when term > init we have something highlighted.  If the highlight is spanning say one or more lines, then tab over the selection.
+ *  similarly if user enters shift-tab, shift selection to the left
+ */
+document.querySelector('body').addEventListener('keydown', function(event) {
+	if (event.keyCode === 9 && event.target.tagName.toLowerCase() === 'textarea') {
+		event.preventDefault();
+
+		var init = event.target.selectionStart;
+		var term = event.target.selectionEnd;
+		event.target.value = event.target.value.substring(0, init) + "\t" + event.target.value.substring(term);
+
+		return false;
+	}
+});
+
 </script>

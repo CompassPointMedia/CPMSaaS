@@ -424,21 +424,22 @@ class RouteCollection implements RouteCollectionInterface
 		$this->didDiscover = true;
 	}
 
-	//--------------------------------------------------------------------
-	/**
-	 * Sets the default constraint to be used in the system. Typically
-	 * for use with the 'resource' method.
-	 *
-	 * @param string $placeholder
-	 *
-	 * @return RouteCollectionInterface
-	 */
-	public function setDefaultConstraint(string $placeholder): RouteCollectionInterface
-	{
-		if (array_key_exists($placeholder, $this->placeholders))
-		{
-			$this->defaultPlaceholder = $placeholder;
-		}
+    //--------------------------------------------------------------------
+
+    /**
+     * Sets the default constraint to be used in the system. Typically
+     * for use with the 'resource' method.
+     *
+     * @param string $placeholder
+     *
+     * @return RouteCollectionInterface
+     */
+    public function setDefaultConstraint(string $placeholder): RouteCollectionInterface
+    {
+        if (array_key_exists($placeholder, $this->placeholders))
+        {
+            $this->defaultPlaceholder = $placeholder;
+        }
 
 		return $this;
 	}

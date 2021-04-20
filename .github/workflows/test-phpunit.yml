@@ -81,8 +81,8 @@ jobs:
 
     steps:
       - name: Create database for MSSQL Server
-        if: ${{ matrix.db-platforms == 'SQLSRV'}}
-        run: sqlcmd -S localhost -U sa -P 1Secure*Password1 -Q "CREATE DATABASE test"
+        if: matrix.db-platforms == 'SQLSRV'
+        run: sqlcmd -S 127.0.0.1 -U sa -P 1Secure*Password1 -Q "CREATE DATABASE test"
 
       - name: Checkout
         uses: actions/checkout@v2
@@ -108,7 +108,7 @@ jobs:
         run: echo "::set-output name=dir::$(composer config cache-files-dir)"
 
       - name: Cache dependencies
-        uses: actions/cache@v2.1.4
+        uses: actions/cache@v2.1.5
         with:
           path: ${{ steps.composercache.outputs.dir }}
           key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
@@ -121,6 +121,10 @@ jobs:
           php -r 'file_put_contents("vendor/laminas/laminas-zendframework-bridge/src/autoload.php", "");'
         env:
           COMPOSER_AUTH: ${{ secrets.COMPOSER_AUTH }}
+
+      - name: Profile slow tests in PHP 7.4 MySQLi for now
+        if: matrix.php-versions == '7.4' && matrix.db-platforms == 'MySQLi'
+        run: echo "TACHYCARDIA_MONITOR_GA=enabled" >> $GITHUB_ENV
 
       - name: Test with PHPUnit
         run: script -e -c "vendor/bin/phpunit --color=always"

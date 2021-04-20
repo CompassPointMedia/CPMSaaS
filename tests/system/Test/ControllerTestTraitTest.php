@@ -1,6 +1,7 @@
 <?php
 namespace CodeIgniter\Test;
 
+use App\Controllers\NeverHeardOfIt;
 use App\Controllers\Home;
 use CodeIgniter\Log\Logger;
 use CodeIgniter\Test\Mock\MockLogger as LoggerConfig;
@@ -15,9 +16,9 @@ use Tests\Support\Controllers\Popcorn;
  * @runTestsInSeparateProcesses
  * @preserveGlobalState         disabled
  */
-class ControllerTesterTest extends CIUnitTestCase
+class ControllerTestTraitTest extends CIUnitTestCase
 {
-	use ControllerTester;
+	use ControllerTestTrait;
 
 	public function testBadController()
 	{
@@ -25,7 +26,7 @@ class ControllerTesterTest extends CIUnitTestCase
 		$logger = new Logger(new LoggerConfig());
 		$result = $this->withURI('http://example.com')
 				->withLogger($logger)
-				->controller(\App\Controllers\NeverHeardOfIt::class)
+				->controller(NeverHeardOfIt::class)
 				->execute('index');
 	}
 
@@ -47,7 +48,7 @@ class ControllerTesterTest extends CIUnitTestCase
 				->controller(Home::class)
 				->execute('index');
 
-		$body = $result->getBody();
+		$body = $result->response()->getBody();
 		$this->assertTrue($result->isOK());
 	}
 
@@ -57,7 +58,7 @@ class ControllerTesterTest extends CIUnitTestCase
 				->controller(Home::class)
 				->execute('index');
 
-		$body = $result->getBody();
+		$body = $result->response()->getBody();
 		$this->assertTrue($result->isOK());
 	}
 
@@ -69,7 +70,7 @@ class ControllerTesterTest extends CIUnitTestCase
 				->controller(Popcorn::class)
 				->execute('index');
 
-		$body = $result->getBody();
+		$body = $result->response()->getBody();
 		$this->assertTrue($result->isOK());
 	}
 
@@ -81,7 +82,7 @@ class ControllerTesterTest extends CIUnitTestCase
 				->controller(Popcorn::class)
 				->execute('index');
 
-		$body = $result->getBody();
+		$body = $result->response()->getBody();
 		$this->assertEquals('Hi there', $body);
 	}
 
@@ -122,7 +123,7 @@ class ControllerTesterTest extends CIUnitTestCase
 				->controller(Popcorn::class)
 				->execute('index');
 
-		$body = $result->getBody();
+		$body = $result->response()->getBody();
 		$this->assertEquals('Hi there', $body);
 	}
 
@@ -158,7 +159,7 @@ class ControllerTesterTest extends CIUnitTestCase
 				->controller(Popcorn::class)
 				->execute('weasel');
 
-		$body = $result->getBody(); // empty
+		$body = $result->response()->getBody(); // empty
 		$this->assertEmpty($body);
 		$this->assertFalse($result->isOK());
 	}
@@ -204,7 +205,7 @@ class ControllerTesterTest extends CIUnitTestCase
 				->controller(Popcorn::class)
 				->execute('index3');
 
-		$response = json_decode($result->getBody());
+		$response = json_decode($result->response()->getBody());
 		$this->assertEquals('en', $response->lang);
 	}
 
@@ -216,7 +217,7 @@ class ControllerTesterTest extends CIUnitTestCase
 					   ->controller(Home::class)
 					   ->execute('index');
 
-		$body = $result->getBody();
+		$body = $result->response()->getBody();
 		$this->assertTrue($result->isOK());
 	}
 

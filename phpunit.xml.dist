@@ -26,6 +26,8 @@
 			<file>./system/ComposerScripts.php</file>
 			<file>./system/Config/Routes.php</file>
 			<file>./system/Test/bootstrap.php</file>
+			<file>./system/Test/ControllerTester.php</file>
+			<file>./system/Test/FeatureTestCase.php</file>
 		</exclude>
 
 		<report>
@@ -43,26 +45,26 @@
 		</testsuite>
 	</testsuites>
 
-	<listeners>
-		<listener class="JohnKary\PHPUnit\Listener\SpeedTrapListener">
+	<extensions>
+		<extension class="Nexus\PHPUnit\Extension\Tachycardia">
 			<arguments>
 				<array>
-					<!-- Number of milliseconds when a test is considered "slow" (Default: 500ms) -->
-					<element key="slowThreshold">
-						<integer>500</integer>
+					<element key="timeLimit">
+						<double>0.50</double>
 					</element>
-					<!-- Number of slow tests included in the report (Default: 10 tests) -->
-					<element key="reportLength">
+					<element key="reportable">
 						<integer>30</integer>
 					</element>
-					<!-- Stop execution upon first slow test (Default: false) -->
-					<element key="stopOnSlow">
+					<element key="precision">
+						<integer>2</integer>
+					</element>
+					<element key="tabulate">
 						<boolean>false</boolean>
 					</element>
 				</array>
 			</arguments>
-		</listener>
-	</listeners>
+		</extension>
+	</extensions>
 
 	<php>
 		<env name="XDEBUG_MODE" value="coverage"/>

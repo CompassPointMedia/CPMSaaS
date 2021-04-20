@@ -3,12 +3,14 @@
 use Rector\CodeQuality\Rector\Expression\InlineIfToExplicitIfRector;
 use Rector\CodeQuality\Rector\For_\ForToForeachRector;
 use Rector\CodeQuality\Rector\Foreach_\UnusedForeachValueToArrayKeysRector;
+use Rector\CodeQuality\Rector\FuncCall\ChangeArrayPushToArrayAssignRector;
 use Rector\CodeQuality\Rector\FuncCall\SimplifyStrposLowerRector;
 use Rector\CodeQuality\Rector\If_\CombineIfRector;
 use Rector\CodeQuality\Rector\If_\ShortenElseIfRector;
 use Rector\CodeQuality\Rector\If_\SimplifyIfElseToTernaryRector;
 use Rector\CodeQuality\Rector\If_\SimplifyIfReturnBoolRector;
 use Rector\CodeQuality\Rector\Return_\SimplifyUselessVariableRector;
+use Rector\CodeQuality\Rector\Ternary\UnnecessaryTernaryExpressionRector;
 use Rector\CodingStyle\Rector\FuncCall\CountArrayToEmptyArrayComparisonRector;
 use Rector\Core\Configuration\Option;
 use Rector\Core\ValueObject\PhpVersion;
@@ -28,7 +30,7 @@ return static function (ContainerConfigurator $containerConfigurator): void {
 	$parameters = $containerConfigurator->parameters();
 
 	// paths to refactor; solid alternative to CLI arguments
-	$parameters->set(Option::PATHS, [__DIR__ . '/app', __DIR__ . '/system', __DIR__ . '/tests']);
+	$parameters->set(Option::PATHS, [__DIR__ . '/app', __DIR__ . '/system', __DIR__ . '/tests', __DIR__ . '/utils/Rector']);
 
 	// do you need to include constants, class aliases or custom autoloader? files listed will be executed
 	$parameters->set(Option::BOOTSTRAP_FILES, [
@@ -41,7 +43,6 @@ return static function (ContainerConfigurator $containerConfigurator): void {
 		__DIR__ . '/system/Debug/Toolbar/Views/toolbar.tpl.php',
 		__DIR__ . '/system/ThirdParty',
 		__DIR__ . '/tests/system/Config/fixtures',
-		__DIR__ . '/tests/system/Models',
 		__DIR__ . '/tests/_support',
 		PassStrictParameterToFunctionParameterRector::class => [__DIR__ . '/tests/system/Database/Live/SelectTest.php'],
 	]);
@@ -50,7 +51,6 @@ return static function (ContainerConfigurator $containerConfigurator): void {
 	$parameters->set(Option::AUTO_IMPORT_NAMES, true);
 	$parameters->set(Option::ENABLE_CACHE, true);
 	$parameters->set(Option::PHP_VERSION_FEATURES, PhpVersion::PHP_73);
-	$parameters->set(Option::PHPSTAN_FOR_RECTOR_PATH, __DIR__ . '/phpstan.neon.dist');
 
 	$services = $containerConfigurator->services();
 	$services->set(UnderscoreToCamelCaseVariableNameRector::class);
@@ -73,4 +73,6 @@ return static function (ContainerConfigurator $containerConfigurator): void {
 	$services->set(SimplifyIfElseToTernaryRector::class);
 	$services->set(UnusedForeachValueToArrayKeysRector::class);
 	$services->set(RemoveConcatAutocastRector::class);
+	$services->set(ChangeArrayPushToArrayAssignRector::class);
+	$services->set(UnnecessaryTernaryExpressionRector::class);
 };

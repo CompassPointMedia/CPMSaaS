@@ -13,6 +13,7 @@ namespace CodeIgniter\Cache\Handlers;
 
 use CodeIgniter\Cache\Exceptions\CacheException;
 use Config\Cache;
+use Throwable;
 
 /**
  * File system cache handler
@@ -124,7 +125,16 @@ class FileHandler extends BaseHandler
 
 		if ($this->writeFile($this->path . $key, serialize($contents)))
 		{
-			chmod($this->path . $key, $this->mode);
+			try
+			{
+				chmod($this->path . $key, $this->mode);
+			}
+			// @codeCoverageIgnoreStart
+			catch (Throwable $e)
+			{
+				log_message('debug', 'Failed to set mode on cache file: ' . $e->getMessage());
+			}
+			// @codeCoverageIgnoreEnd
 
 			return true;
 		}
@@ -146,6 +156,30 @@ class FileHandler extends BaseHandler
 		$key = $this->prefix . $key;
 
 		return is_file($this->path . $key) && unlink($this->path . $key);
+	}
+
+	//--------------------------------------------------------------------
+
+	/**
+	 * Deletes items from the cache store matching a given pattern.
+	 *
+	 * @param string $pattern Cache items glob-style pattern
+	 *
+	 * @return boolean
+	 */
+	public function deleteMatching(string $pattern)
+	{
+		$success = true;
+
+		foreach (glob($this->path . $pattern) as $filename)
+		{
+			if (! is_file($filename) || ! @unlink($filename))
+			{
+				$success = false;
+			}
+		}
+
+		return $success;
 	}
 
 	//--------------------------------------------------------------------

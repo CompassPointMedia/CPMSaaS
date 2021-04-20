@@ -1,9 +1,9 @@
 <?php
 
-namespace CodeIgniter\HTTP\Cookie;
+namespace CodeIgniter\Cookie;
 
-use CodeIgniter\HTTP\Cookie\CookieStore;
-use CodeIgniter\HTTP\Exceptions\CookieException;
+use CodeIgniter\Cookie\CookieStore;
+use CodeIgniter\Cookie\Exceptions\CookieException;
 use CodeIgniter\Test\CIUnitTestCase;
 use DateTimeImmutable;
 use PHPUnit\Framework\MockObject\MockObject;

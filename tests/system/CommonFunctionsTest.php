@@ -127,7 +127,7 @@ class CommonFunctionsTest extends CIUnitTestCase
 			'bar'        => 'baz',
 		];
 		$expected = '<h1>bar</h1>';
-		$this->assertStringContainsString($expected, view('\Tests\Support\View\Views\simple', $data, []));
+		$this->assertStringContainsString($expected, view('\Tests\Support\View\Views\simple', $data));
 	}
 
 	public function testViewSavedData()
@@ -212,7 +212,7 @@ class CommonFunctionsTest extends CIUnitTestCase
 
 	public function testInvisibleEncoded()
 	{
-		$this->assertEquals('Javascript', remove_invisible_characters('Java%0cscript', true));
+		$this->assertEquals('Javascript', remove_invisible_characters('Java%0cscript'));
 	}
 
 	public function testAppTimezone()

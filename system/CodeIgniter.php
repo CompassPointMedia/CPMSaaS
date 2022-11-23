@@ -200,11 +200,12 @@ class CodeIgniter
             Kint::$enabled_mode = false;
             // @codeCoverageIgnoreEnd
         }
-        */
+
 		if (! CI_DEBUG)
 		{
 			Kint::$enabled_mode = false; // @codeCoverageIgnore
 		}
+        */
 	}
 
 	/**
